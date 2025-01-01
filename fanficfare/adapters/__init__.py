@@ -138,6 +138,7 @@ from . import adapter_syosetucom
 from . import adapter_kakuyomujp
 from . import adapter_fanfictionsfr
 from . import adapter_touchfluffytail
+from . import adapter_boxnovelcom
 from . import adapter_inkittcom
 from . import adapter_spiritfanfictioncom
 from . import adapter_superlove
