@@ -327,6 +327,8 @@ def get_valid_set_options():
                'show_timestamps': (['fiction.live'], None, boollist),
                'prepend_section_titles': (['syosetu.com','kakuyomu.jp'], None, boollist+['firstepisode']),
                'replace_text_formatting':(['ficbook.net'], None, boollist),
+               'session_cookie': (['www.inkitt.com'],None,None),
+               'credentials_cookie': (['www.inkitt.com'],None,None),
                }
 
     return dict(valdict)
