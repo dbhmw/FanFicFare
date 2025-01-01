@@ -315,6 +315,8 @@ def get_valid_set_options():
                'show_nsfw_cover_images': (['fiction.live'], None, boollist),
                'show_timestamps': (['fiction.live'], None, boollist),
                'prepend_section_titles': (['syosetu.com','kakuyomu.jp'], None, boollist+['firstepisode']),
+               'session_cookie': (['www.inkitt.com'],None,None),
+               'credentials_cookie': (['www.inkitt.com'],None,None),
                }
 
     return dict(valdict)
@@ -589,6 +591,8 @@ def get_valid_keywords():
                  'decode_emails',
                  'epub_version',
                  'prepend_section_titles',
+                 'session_cookie',
+                 'credentials_cookie',
                  ])
 
 # *known* entry keywords -- or rather regexps for them.
