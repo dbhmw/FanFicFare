@@ -62,7 +62,6 @@ from . import adapter_dokugacom
 from . import adapter_storiesofardacom
 from . import adapter_ncisfictioncom
 from . import adapter_fanfiktionde
-from . import adapter_ponyfictionarchivenet
 from . import adapter_themasquenet
 from . import adapter_pretendercentrecom
 from . import adapter_darksolaceorg
@@ -109,7 +108,6 @@ from . import adapter_sinfuldreamscomwickedtemptation
 from . import adapter_asianfanficscom
 from . import adapter_mttjustoncenet
 from . import adapter_narutoficorg
-from . import adapter_starskyhutcharchivenet
 from . import adapter_thedelphicexpansecom
 from . import adapter_wwwaneroticstorycom
 from . import adapter_lcfanficcom
@@ -119,7 +117,6 @@ from . import adapter_wattpadcom
 from . import adapter_novelonlinefullcom
 from . import adapter_wwwnovelallcom
 from . import adapter_wuxiaworldxyz
-from . import adapter_novelupdatescc
 from . import adapter_hentaifoundrycom
 from . import adapter_mugglenetfanfictioncom
 from . import adapter_swiorgru
@@ -130,7 +127,6 @@ from . import adapter_chireadscom
 from . import adapter_scribblehubcom
 from . import adapter_fictionlive
 from . import adapter_thesietchcom
-from . import adapter_fastnovelsnet
 from . import adapter_squidgeworldorg
 from . import adapter_novelfull
 from . import adapter_psychficcom
