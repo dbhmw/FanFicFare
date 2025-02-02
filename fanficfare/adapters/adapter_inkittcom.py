@@ -41,7 +41,7 @@ class InkittComSiteAdapter(BaseSiteAdapter):
         return "https://" + cls.getSiteDomain() + "/stories/genre/123456"
 
     def getSiteURLPattern(self):
-        return (r"https://" + re.escape(self.getSiteDomain()) + r"/stories/\w+/(?P<id>\d+)")
+        return (r"https://(?:www\.)?inkitt\.com/stories/\w+/(?P<id>\d+)")
 
     def performLogin(self):
         if self.getConfig('session_cookie') and self.getConfig('credentials_cookie'):
@@ -72,10 +72,10 @@ class InkittComSiteAdapter(BaseSiteAdapter):
                 except json.JSONDecodeError as e:
                     logger.debug("JSONDecodeError: Could not decode JSON - %s"%e)
             if loaded < 2:
-                raise exceptions.FailedToLogin(url, "Login unsuccessful. Missing (%s) cookies"%(2-loaded))
+                raise exceptions.FailedToLogin(self.url, "Login unsuccessful. Missing (%s) cookies"%(2-loaded))
             return True
         else:
-            raise exceptions.FailedToLogin(url, "Login unsuccessful. Missing cookies")
+            raise exceptions.FailedToLogin(self.url, "Login unsuccessful. Missing cookies")
 
     def extractChapterUrlsAndMetadata(self, get_cover=True):
         logger.debug("URL: %s", self.url)
