@@ -37,7 +37,7 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
 
     def __init__(self, config, url):
         BaseSiteAdapter.__init__(self, config, url)
-        logger.debug("LiteroticaComAdapter:__init__ - url='%s'" % url)
+        #logger.debug("LiteroticaComAdapter:__init__ - url='%s'" % url)
 
         # Each adapter needs to have a unique site abbreviation.
         self.story.setMetadata('siteabbrev','litero')
@@ -53,7 +53,7 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         ## have been keeping the language when 'normalizing' to first
         ## chapter.
         url = re.sub(r"^(https?://)"+LANG_RE+r"(\.i)?",
-                     r"\1\2",
+                     r"https://\2",
                      url)
         url = url.replace('/beta/','/') # to allow beta site URLs.
 
@@ -77,7 +77,7 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
 
     @classmethod
     def getSiteExampleURLs(cls):
-        return "http://www.literotica.com/s/story-title https://www.literotica.com/series/se/9999999 https://www.literotica.com/s/story-title https://www.literotica.com/i/image-or-comic-title https://www.literotica.com/p/poem-title http://portuguese.literotica.com/s/story-title http://german.literotica.com/s/story-title"
+        return "https://www.literotica.com/s/story-title https://www.literotica.com/series/se/9999999 https://www.literotica.com/s/story-title https://www.literotica.com/i/image-or-comic-title https://www.literotica.com/p/poem-title https://portuguese.literotica.com/s/story-title https://german.literotica.com/s/story-title"
 
     def getSiteURLPattern(self):
         # also https://www.literotica.com/series/se/80075773
@@ -122,13 +122,22 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         if "This submission is awaiting moderator's approval" in data:
             raise exceptions.StoryDoesNotExist("This submission is awaiting moderator's approval. %s"%self.url)
 
+        ## 2025Feb - domains other than www now use different HTML.
+        ## Need to look for two different versions of basically
+        ## everything.
+
         ## not series URL, assumed to be a chapter.  Look for Story
         ## Info block of post-beta page.  I don't think it should happen?
         if '/series/se' not in self.url:
-            if not soup.select_one('div.page__aside'):
+            #logger.debug(data)
+            ## looking for /series/se URL to indicate this is a
+            ## chapter.
+            if not soup.select_one('div.page__aside') and not soup.select_one('div.sidebar'):
                 raise exceptions.FailedToDownload("Missing Story Info block, Beta turned off?")
 
             storyseriestag = soup.select_one('a.bn_av')
+            if not storyseriestag:
+                storyseriestag = soup.select_one('a[class^="_files__link_"]')
             # logger.debug("Story Series Tag:%s"%storyseriestag)
 
             if storyseriestag:
@@ -157,6 +166,8 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         ## Should change to /authors/ if/when it starts appearing.
         ## Assuming it's in the same place.
         authora = soup.find("a", class_="y_eU")
+        if not authora:
+            authora = soup.select_one('a[class^="_author__title"]')
         authorurl = authora['href']
         if authorurl.startswith('//'):
             authorurl = self.parsedUrl.scheme+':'+authorurl
@@ -171,17 +182,27 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         else: # if all else fails
             self.story.setMetadata('authorId', stripHTML(authora))
 
-        self.story.extendList('eroticatags', [ stripHTML(t).title() for t in soup.select('div#tabpanel-tags a.av_as') ])
+        if soup.select('div#tabpanel-tags'):
+            # logger.debug("tags1")
+            self.story.extendList('eroticatags', [ stripHTML(t).title() for t in soup.select('div#tabpanel-tags a.av_as') ])
+        if soup.select('div[class^="_widget__tags_"]'):
+            # logger.debug("tags2")
+            self.story.extendList('eroticatags', [ stripHTML(t).title() for t in soup.select('div[class^="_widget__tags_"] a[class^="_tags__link_"]') ])
+        # logger.debug(self.story.getList('eroticatags'))
 
         ## look first for 'Series Introduction', then Info panel short desc
         ## series can have either, so put in common code.
-        introtag = soup.select_one('div.bp_rh p')
+        introtag = soup.select_one('div.bp_rh')
         descdiv = soup.select_one('div#tabpanel-info div.bn_B')
+        if not descdiv:
+            descdiv = soup.select_one('div[class^="_tab__pane_"] div[class^="_widget__info_"]')
         if introtag and stripHTML(introtag):
             # make sure there's something in the tag.
+            # logger.debug("intro %s"%introtag)
             self.setDescription(self.url,introtag)
         elif descdiv and stripHTML(descdiv):
             # make sure there's something in the tag.
+            # logger.debug("desc %s"%descdiv)
             self.setDescription(self.url,descdiv)
         else:
             ## Only for backward compatibility with 'stories' that
@@ -212,7 +233,10 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
             self.story.setMetadata('status','Completed')
 
             # Add the category from the breadcumb.
-            self.story.addToList('category', soup.find('div', id='BreadCrumbComponent').findAll('a')[1].string)
+            breadcrumbs = soup.find('div', id='BreadCrumbComponent')
+            if not breadcrumbs:
+                breadcrumbs = soup.select_one('ul[class^="_breadcrumbs_list_"]')
+            self.story.addToList('category', breadcrumbs.findAll('a')[1].string)
 
             ## one-shot chapter
             self.add_chapter(self.story.getMetadata('title'), self.url)
@@ -328,14 +352,13 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         return
 
     def getPageText(self, raw_page, url):
-        # logger.debug('Getting page text')
-#         logger.debug(soup)
+        logger.debug('Getting page text')
         raw_page = raw_page.replace('<div class="b-story-body-x x-r15"><div><p>','<div class="b-story-body-x x-r15"><div>')
-#         logger.debug("\tChapter text: %s" % raw_page)
+        # logger.debug("\tChapter text: %s" % raw_page)
         page_soup = self.make_soup(raw_page)
         [comment.extract() for comment in page_soup.findAll(string=lambda text:isinstance(text, Comment))]
         fullhtml = ""
-        for aa_ht_div in page_soup.find_all('div', 'aa_ht'):
+        for aa_ht_div in page_soup.find_all('div', 'aa_ht') + page_soup.select('div[class^="_article__content_"]'):
             if aa_ht_div.div:
                 html = unicode(aa_ht_div.div)
                 # Strip some starting and ending tags,
@@ -353,6 +376,9 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
         raw_page = self.get_request(url)
         page_soup = self.make_soup(raw_page)
         pages = page_soup.find('div',class_='l_bH')
+        if not pages:
+            pages = page_soup.select_one('div._pagination_h0sum_1')
+        # logger.debug(pages)
 
         fullhtml = ""
         chapter_description = ''
@@ -365,7 +391,10 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
             ## look for highest numbered page, they're not all listed
             ## when there are many.
 
-            last_page_link = pages.find_all('a', class_='l_bJ')[-1]
+            last_page_links = pages.find_all('a', class_='l_bJ')
+            if not last_page_links:
+                last_page_links = pages.select('a[class^="_pagination__item_"]')
+            last_page_link = last_page_links[-1]
             last_page_no = int(urlparse.parse_qs(last_page_link['href'].split('?')[1])['page'][0])
             # logger.debug(last_page_no)
             for page_no in range(2, last_page_no+1):
@@ -374,7 +403,7 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
                 raw_page = self.get_request(page_url)
                 fullhtml += self.getPageText(raw_page, url)
 
-#         logger.debug(fullhtml)
+        #logger.debug(fullhtml)
         page_soup = self.make_soup(fullhtml)
         fullhtml = self.utf8FromSoup(url, self.make_soup(fullhtml))
         fullhtml = chapter_description + fullhtml
@@ -382,6 +411,94 @@ class LiteroticaSiteAdapter(BaseSiteAdapter):
 
         return fullhtml
 
+    def get_urls_from_page(self,url,normalize):
+        from ..geturls import get_urls_from_html
+
+        ## hook for logins, etc.
+        self.before_get_urls_from_page(url,normalize)
+
+        # this way it uses User-Agent or other special settings.
+        data = self.get_request(url,usecache=False)
+
+        page_urls = get_urls_from_html(self.make_soup(data), url, configuration=self.configuration, normalize=normalize)
+
+        user_story_list = re.search(r'literotica\.com/authors/.+?/lists\?listid=(?P<list_id>\d+)', url)
+        fav_authors = re.search(r'literotica\.com/authors/.+?/favorites', url)
+        written = re.search(r'literotica.com/authors/.+?/works/', url)
+        # logger.debug((user_story_list, fav_authors, written))
+
+        # If the url is not supported
+        if not user_story_list and not fav_authors and not written:
+            return {'urllist':page_urls}
+
+        # Grabbing the main list where chapters are contained.
+        if user_story_list:
+            js_story_list = re.search(r'data:\$R\[\d+?\]=\{pages:\$R\[\d+?\]=\[\$R\[\d+?\]=\{(?P<pages>success:!\d,current_page:\d+,last_page:\d+,total:\d+,per_page:\d+)(,has_series:!\d)?,data:\$R\[\d+\]=\[\$R\[\d+\]=\{allow_vote(?P<data>.+)\}\],pageParams', data)
+            logger.debug('user_story_list ID [%s]'%user_story_list.group('list_id'))
+        else:
+            js_story_list = re.search(r'data:\$R\[\d+?\]=\{pages:\$R\[\d+?\]=\[\$R\[\d+?\]=\{(?P<pages>current_page:\d+,last_page:\d+,total:\d+,per_page:\d+)(,has_series:!\d)?,data:\$R\[\d+\]=\[\$R\[\d+\]=\{(?!aim)(?P<data>.+)\}\],pageParams', data)
+
+        # In case the regex becomes outdated
+        if not js_story_list:
+            return {'urllist':page_urls}
+
+        user = re.search(r'literotica\.com\/authors\/(.+?)\/', url)
+        # Extract the current (should be 1) and last page numbers from the js.
+        pages = re.search(r"current_page:(?P<current>\d+),last_page:(?P<last>\d+),total:\d+", js_story_list.group('pages'))
+        logger.debug("Pages %s/%s"%(int(pages.group('current')), int(pages.group('last'))))
+
+        urls = []
+        # Necessary to format a proper link as there were no visible data specifying what kind of link that should be.
+        cat_to_link = {'adult-comics': 'i', 'erotic-art': 'i', 'illustrated-poetry': 'p', 'erotic-audio-poetry': 'p', 'erotic-poetry': 'p', 'non-erotic-poetry': 'p'}
+        stroy_urltype = re.findall(r"category_info:\$R\[.*?type:\".+?\",pageUrl:\"(.+?)\"}.+?,type:\"(.+?)\",url:\"(.+?)\",", js_story_list.group('data'))
+        for i in range(len(stroy_urltype)):
+            urls.append('https://www.literotica.com/%s/%s'%(cat_to_link.get(stroy_urltype[i][0], 's'), stroy_urltype[i][2]))
+
+        # Removes the duplicates
+        seen = set()
+        urls = [x for x in (page_urls + urls) if not (x in seen or seen.add(x))]
+        logger.debug("Found [%s] stories so far."%len(urls))
+
+        # Sometimes the rest of the stories are burried in the js so no fetching in necessery.
+        if int(pages.group('last')) == int(pages.group('current')):
+            return {'urllist': urls}
+
+        user = urlparse.quote(user.group(1))
+        logger.debug("User: [%s]"%user)
+
+        import json
+        last_page = int(pages.group('last'))
+        current_page = int(pages.group('current')) + 1
+        # Fetching the remaining urls from api. Can't trust the number given about the pages left from a website. Sometimes even the api returns outdated number of pages. 
+        while current_page <= last_page:
+            i = len(urls)
+            logger.debug("Pages %s/%s"%(current_page, int(last_page)))
+            if fav_authors:
+                jsn = self.get_request('https://literotica.com/api/3/users/{}/favorite/works?params=%7B%22page%22%3A{}%2C%22pageSize%22%3A50%2C%22type%22%3A%22{}%22%2C%22withSeriesDetails%22%3Atrue%7D'.format(user, current_page, stroy_urltype[0][1]))
+            elif user_story_list:
+                jsn = self.get_request('https://literotica.com/api/3/users/{}/list/{}?params=%7B%22page%22%3A{}%2C%22pageSize%22%3A50%2C%22withSeriesDetails%22%3Atrue%7D'.format(user, user_story_list.group('list_id'), current_page))
+            else:
+                jsn = self.get_request('https://literotica.com/api/3/users/{}/series_and_works?params=%7B%22page%22%3A{}%2C%22pageSize%22%3A50%2C%22sort%22%3A%22date%22%2C%22type%22%3A%22{}%22%2C%22listType%22%3A%22expanded%22%7D'.format(user, current_page, stroy_urltype[0][1]))
+
+            urls_data = json.loads(jsn)
+            last_page = urls_data["last_page"]
+            current_page = int(urls_data["current_page"]) + 1
+            for story in urls_data['data']:
+                if story['url']:
+                    urls.append('https://www.literotica.com/%s/%s'%(cat_to_link.get(story["category_info"]["pageUrl"], 's'), str(story['url'])))
+                    continue
+                # Series has no url specified and contains all of the story links belonging to the series
+                urls.append('https://www.literotica.com/series/se/%s'%str(story['id']))
+                for series_story in story['parts']:
+                    urls.append('https://www.literotica.com/%s/%s'%(cat_to_link.get(series_story["category_info"]["pageUrl"], 's'), str(series_story['url'])))
+            logger.debug("Found [%s] stories."%(len(urls) - i))
+
+        # Again removing duplicates.
+        seen = set()
+        urls = [x for x in urls if not (x in seen or seen.add(x))]
+
+        logger.debug("Found total of [%s] stories"%len(urls))
+        return {'urllist':urls}
 
 def getClass():
     return LiteroticaSiteAdapter

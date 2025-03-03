@@ -77,6 +77,7 @@ def get_urls_from_html(data,url=None,configuration=None,normalize=False,foremail
             href = form_url(url,a['href'])
             # logger.debug("1 urlhref:%s"%href)
             href = cleanup_url(href,configuration,foremail)
+            # logger.debug("1.5 urlhref:%s"%href)
             try:
                 # logger.debug("2 urlhref:%s"%href)
                 adapter = adapters.getAdapter(configuration,href)
@@ -180,6 +181,12 @@ def cleanup_url(href,configuration,foremail=False):
             href = href.replace('&index=1','')
         except Exception as e:
             logger.warning("Skipping royalroad email URL %s, got HTTP error %s"%(href,e))
+    if '/../' in href:
+        ## For mcstories.com, see #1160 All my attempts to use
+        ## urljoin() got uncomfortably complex in the face of
+        ## javascript links and parameter URLs.  And normpath() will
+        ## give \ on windows.
+        href = re.sub(r'([^/]+/../)',r'',href)
     return href
 
 def get_urls_from_imap(srv,user,passwd,folder,markread=True,normalize_urls=False):
