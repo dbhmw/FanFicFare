@@ -40,7 +40,8 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         self.username = ""
         self.password = ""
         self.is_adult = self.getConfig("is_adult")
-        self.loggedin = False
+        self.entire_folder = self.getConfig("download_entire_folder", False)
+        self.oneshot = None
         self.dateformat = "%d %b %Y %H:%M"
         self.story.setMetadata('siteabbrev','sf')
         self.story.setMetadata('status', 'Completed')
@@ -57,6 +58,12 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
 
     def getSiteURLPattern(self):
         return r"https?://"+re.escape(self.getSiteDomain())+r"/view/(?P<id>\d+)"
+
+    def needToLoginCheck(self, data):
+        if 'This submission is only available to registered users. Please login to view it.' in data:
+            return True
+        else:
+            return False
 
     def performLogin(self, url):
         params = {}
@@ -77,20 +84,16 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         if 'href="/upload" class="button"' not in d :
             logger.info("Failed to login to URL %s as %s" % (loginUrl, params['LoginForm[sfLoginUsername]']))
             raise exceptions.FailedToLogin(url,params['LoginForm[sfLoginUsername]'])
-        else:
-            self.loggedin = True
 
     def extractChapterUrlsAndMetadata(self):
         logger.info("url: "+self.url)
 
         data = self.get_request(self.url,usecache=True)
-
-        if (self.getConfig("always_login") and 'href="/upload" class="button"' not in data) or 'This submission is only available to registered users. Please login to view it.' in data:
+        if (self.getConfig("always_login") and 'href="/upload" class="button"' not in data) or self.needToLoginCheck(data):
             self.performLogin(self.url)
             data = self.get_request(self.url,usecache=False)
 
         soup = self.make_soup(data)
-
         if soup.select_one('.sf-content > p > strong'):
             if self.is_adult:
                 url = self.url + '/guest'
@@ -99,62 +102,154 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             else:
                 raise exceptions.AdultCheckRequired(self.url)
 
-        title = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight')
-        if not title:
-            title = soup.select_one('span#sfContentTitle')
-        self.story.setMetadata('title',title.get_text())
-
         self.story.setMetadata('author', soup.select_one('.sf-username.sfTextMedium').get_text())
         self.story.setMetadata('authorUrl', soup.select_one('a#sf-userinfo-outer').get('href'))
         self.story.setMetadata('authorId', re.search(r'\?user=(\d+)',soup.select_one('a#sf-userinfo-outer > img').get('src')).group(1))
 
         story_folder = soup.select_one('div.section-footer a[href^="/browse/folder/stories"]')
-        logger.debug('Folder: ' + story_folder.get_text())
-        if not story_folder or True: #or ONE_PAGE:self.getConfig("onestory")
-            genre_raw = soup.select_one('div.section-content > div.titlehover').find_all('a',{'class': 'sf-tag'},recursive=False)
+        logger.debug(story_folder)
+        if not story_folder or not self.entire_folder:
+            self.story.setMetadata('title', stripHTML(soup.select_one('span#sfContentTitle')))
+            self.oneshot = data
+            genre_raw = soup.find('div', class_='section-title', string='Official Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
             for a in genre_raw:
                 logger.debug(a.get_text())
                 self.story.addToList('genre', a.get_text())
+            logger.debug("===========")
+            unof_genre_raw = soup.find('div', class_='section-title', string='Unofficial Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+            for a in unof_genre_raw:
+                logger.debug(a.get_text())
+                self.story.addToList('unofficialGenre', a.get_text())
 
             stats_section = soup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
+
+            raw_date_posted = re.search(r'Posted\s(.+?)<br/>',stats_section)
+            chapter_date = makeDate(raw_date_posted.group(1),self.dateformat)
+            self.story.setMetadata('datePublished', chapter_date)
+            self.story.setMetadata('dateUpdated', chapter_date)
 
             self.story.setMetadata('views', int(re.search(r'(\d{1,3}(?:,\d{3})*)\sviews?<br/>', stats_section).group(1).replace(',','')))
             self.story.setMetadata('faves', int(re.search(r'(\d{1,3}(?:,\d{3})*)\sfav(?:es)?<br/>', stats_section).group(1).replace(',','')))
             self.story.setMetadata('comments', int(re.search(r'(\d{1,3}(?:,\d{3})*)\scomments?<br/>', stats_section).group(1).replace(',','')))
             self.story.setMetadata('votes', int(re.search(r'(\d{1,3}(?:,\d{3})*)\svotes?<br/>', stats_section).group(1).replace(',','')))
 
-            raw_date_posted = re.search(r'Posted\s(.+?)<br/>',stats_section)
-            chapterDate = makeDate(raw_date_posted.group(1),self.dateformat)
-            raw_date_mod = re.search(r'Last edited\s(.+?)<br/>',stats_section)
-            if not raw_date_mod:
-                raw_date_mod = raw_date_posted
-            chapterDateMod = makeDate(raw_date_mod.group(1),self.dateformat)
-
-            self.story.setMetadata('datePublished', chapterDate)
-            self.story.setMetadata('dateUpdated', chapterDate)
-
-            self.story.setMetadata('numChapters',1)
-            self.add_chapter(soup.select_one('#sfContentTitle').get_text(),self.url,
-             {'date':chapterDate.strftime(self.getConfig("datechapter_format",self.getConfig("datePublished_format","%Y-%m-%d %H:%M"))),
-             'modified':chapterDateMod.strftime(self.getConfig("datechapter_format",self.getConfig("datePublished_format","%Y-%m-%d %H:%M")))})
+            self.story.setMetadata('numChapters', 1)
+            self.add_chapter(soup.select_one('#sfContentTitle').get_text(), self.url)
             logger.debug(soup.select_one('#sfContentTitle').get_text())
             return
 
-        if self.loggedin:
-            chapters_container = soup.select_one('div.section-content > div.section-content-list').parent
-        ## &stories-display=40
-        self.story.setMetadata('numChapters',1)
+        #folderlink = 'https://' + self.getSiteDomain() + story_folder.get('href') + '&stories-display=45'
+        #logger.debug(folderlink)
+        #while True:
+        #    soup = self.make_soup(self.get_request(folderlink,usecache=True))
+        #    chapters = soup.select_one('#yw0 > div.items').find_all('div', recursive=False)
+        #    for chapter in chapters:
+        #        a_href = chapter.select_one('span.sf-browse-shortlist-title > a')
+        #        logger.debug('https://' + self.getSiteDomain() + a_href.get('href'))
+        #    break
 
-        
-        self.story.addToList('genre',char.string)
+        chapters_container = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight').parent.find('div', class_='section-content').find_all('div', class_='section-content-list')
+        if not chapters_container:
+            self.performLogin(self.url)
+            soup = self.make_soup(self.get_request(self.url,usecache=False))
+            chapters_container = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight').parent.find('div', class_='section-content').find_all('div', class_='section-content-list')
 
-        if 'Published' in label:
-            self.story.setMetadata('datePublished', makeDate(stripHTML(value), self.dateformat))
-            self.story.setMetadata('dateUpdated', makeDate(stripHTML(value), self.dateformat))
+        #logger.debug(chapters_container)
+        first_url = None
+        chapter_url = None
+        urls = []
+        for chapter_div in chapters_container:
+            if chapter_div.find('strong'):
+                chapter_url = self.url
+                chapter_title = chapter_div.find('strong').get_text()
+            else:
+                chapter_a = chapter_div.find('a')
+                chapter_url = 'https://' + self.getSiteDomain() + chapter_a.get('href')
+                chapter_title = stripHTML(chapter_a)
+            first_url = chapter_url if not first_url else first_url
+            urls.append(chapter_url)
+            self.add_chapter(chapter_title, chapter_url)
+
+        logger.debug(urls)
+        logger.debug("First url: [%s]"%first_url)
+        logger.debug("Last url: [%s]"%chapter_url)
+        logger.debug("Chapters: %s"%len(chapters_container))
+
+        soups = []
+        if self.entire_folder == 'metadata':
+            for url in urls:
+                if url == self.url:
+                    soups.append(soup)
+                    continue
+                soup_chp = self.make_soup(self.get_request(url,usecache=True))
+                soups.append(soup_chp)
+        else:
+            for url in urls:
+                if url == self.url:
+                    soups.append(soup)
+                elif url == first_url or url == chapter_url:
+                    soup_chp = self.make_soup(self.get_request(url,usecache=True))
+                    soups.append(soup_chp)
+
+        views = 0
+        votes = 0
+        faves = 0
+        comments = 0
+        raw_date_posted = None
+        for sup in soups:
+            logger.debug('========================')
+            stats_section = sup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
+
+            if raw_date_posted:
+                raw_date_updated = re.search(r'Posted\s(.+?)<br/>',stats_section)
+            else:
+                raw_date_posted = re.search(r'Posted\s(.+?)<br/>',stats_section)
+            views += int(re.search(r'(\d{1,3}(?:,\d{3})*)\sviews?<br/>', stats_section).group(1).replace(',',''))
+            faves += int(re.search(r'(\d{1,3}(?:,\d{3})*)\sfav(?:es)?<br/>', stats_section).group(1).replace(',',''))
+            comments += int(re.search(r'(\d{1,3}(?:,\d{3})*)\scomments?<br/>', stats_section).group(1).replace(',',''))
+            votes += int(re.search(r'(\d{1,3}(?:,\d{3})*)\svotes?<br/>', stats_section).group(1).replace(',',''))
+            logger.debug(views)
+
+            logger.debug("== Tags ==")
+            genre_raw = sup.find('div', class_='section-title', string='Official Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+            for a in genre_raw:
+                logger.debug(a.get_text())
+                self.story.addToList('genre', a.get_text())
+
+            logger.debug("== Unofficial Tags ==")
+            unof_genre_raw = sup.find('div', class_='section-title', string='Unofficial Tags')
+            if unof_genre_raw:
+                unof_genre_raw = unof_genre_raw.parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+                for a in unof_genre_raw:
+                    logger.debug(a.get_text())
+                    self.story.addToList('unofficialGenre', a.get_text())
+
+        self._setURL(first_url)
+        self.story.setMetadata('title', stripHTML(soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight')))
+        self.story.setMetadata('numChapters', len(chapters_container))
+        self.story.setMetadata('datePublished', makeDate(raw_date_posted.group(1),self.dateformat))
+        self.story.setMetadata('dateUpdated', makeDate(raw_date_updated.group(1),self.dateformat))
+        logger.debug("Posted [%s]"%self.story.getMetadata('datePublished'))
+        logger.debug("Updated: [%s]"%self.story.getMetadata('dateUpdated'))
+        logger.debug("Unofficial: %s"%self.story.getMetadata('unofficialGenre'))
+
+        self.story.setMetadata('views', views)
+        self.story.setMetadata('faves', faves)
+        self.story.setMetadata('comments', comments)
+        self.story.setMetadata('votes', votes)
+        logger.debug(self.story.getMetadata('views'))
+        logger.debug(self.story.getMetadata('faves'))
+        logger.debug(self.story.getMetadata('comments'))
+        logger.debug(self.story.getMetadata('votes'))
 
     def getChapterText(self, url):
-        data = self.get_request(self.url,usecache=True)
-        soup = self.make_soup(data)
+        logger.debug('Getting chapter '+url)
+        if self.oneshot:
+            data = self.oneshot
+            soup = self.make_soup(data)
+        else:
+            soup = self.make_soup(self.get_request(url,usecache=True))
+
         story = soup.new_tag("div", **{'id': 'story'})
         desc = soup.select_one('#sfContentDescription')
         if desc:
