@@ -115,11 +115,13 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             for a in genre_raw:
                 logger.debug(a.get_text())
                 self.story.addToList('genre', a.get_text())
-            logger.debug("===========")
-            unof_genre_raw = soup.find('div', class_='section-title', string='Unofficial Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
-            for a in unof_genre_raw:
-                logger.debug(a.get_text())
-                self.story.addToList('unofficialGenre', a.get_text())
+
+            unof_genre_raw = soup.find('div', class_='section-title', string='Unofficial Tags')
+            if unof_genre_raw:
+                unof_genre_raw = unof_genre_raw.parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+                for a in unof_genre_raw:
+                    logger.debug(a.get_text())
+                    self.story.addToList('unofficialGenre', a.get_text())
 
             stats_section = soup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
 
