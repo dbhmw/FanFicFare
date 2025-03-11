@@ -152,7 +152,12 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             logger.debug(soup.select_one('#sfContentTitle').get_text())
             return
 
-        chapters_container = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight').parent.find('div', class_='section-content').find_all('div', class_='section-content-list')
+        try:
+            chapters_container = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight').parent.find('div', class_='section-content').find_all('div', class_='section-content-list')
+        except AttributeError as e:
+            logger.debug(str(e))
+            raise exceptions.FailedToDownload('List of chapters not found!')
+
         if not chapters_container:
             self.performLogin(self.url)
             soup = self.make_soup(self.get_request(self.url,usecache=False))
