@@ -85,6 +85,21 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             logger.info("Failed to login to URL %s as %s" % (loginUrl, params['LoginForm[sfLoginUsername]']))
             raise exceptions.FailedToLogin(url,params['LoginForm[sfLoginUsername]'])
 
+    def setGenre(self, soup):
+        logger.debug("== Tags ==")
+        genre_raw = soup.find('div', class_='section-title', string='Official Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+        for a in genre_raw:
+            logger.debug(a.get_text())
+            self.story.addToList('genre', a.get_text())
+
+        logger.debug("== Unofficial Tags ==")
+        unof_genre_raw = soup.find('div', class_='section-title', string='Unofficial Tags')
+        if unof_genre_raw:
+            unof_genre_raw = unof_genre_raw.parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
+            for a in unof_genre_raw:
+                logger.debug(a.get_text())
+                self.story.addToList('unofficialGenre', a.get_text())
+
     def extractChapterUrlsAndMetadata(self):
         logger.info("url: "+self.url)
 
@@ -93,14 +108,14 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             self.performLogin(self.url)
             data = self.get_request(self.url,usecache=False)
 
+        # Some stories are served with only a warning and adding 'guest' at the end reveals the story
         soup = self.make_soup(data)
         if soup.select_one('.sf-content > p > strong'):
-            if self.is_adult:
-                url = self.url + '/guest'
-                data = self.get_request(url,usecache=True)
-                soup = self.make_soup(data)
-            else:
+            if not self.is_adult:
                 raise exceptions.AdultCheckRequired(self.url)
+            url = self.url + '/guest'
+            data = self.get_request(url,usecache=True)
+            soup = self.make_soup(data)
 
         self.story.setMetadata('author', soup.select_one('.sf-username.sfTextMedium').get_text())
         self.story.setMetadata('authorUrl', soup.select_one('a#sf-userinfo-outer').get('href'))
@@ -108,20 +123,17 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
 
         story_folder = soup.select_one('div.section-footer a[href^="/browse/folder/stories"]')
         logger.debug(story_folder)
+        logger.debug("Attempt entire folder? [%s]"%self.entire_folder)
         if not story_folder or not self.entire_folder:
-            self.story.setMetadata('title', stripHTML(soup.select_one('span#sfContentTitle')))
-            self.oneshot = data
-            genre_raw = soup.find('div', class_='section-title', string='Official Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
-            for a in genre_raw:
-                logger.debug(a.get_text())
-                self.story.addToList('genre', a.get_text())
+            title = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight')
+            if title == None:
+                self.story.setMetadata('title', stripHTML(soup.select_one('span#sfContentTitle')))
+            else:
+                self.story.setMetadata('title', stripHTML(title))
 
-            unof_genre_raw = soup.find('div', class_='section-title', string='Unofficial Tags')
-            if unof_genre_raw:
-                unof_genre_raw = unof_genre_raw.parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
-                for a in unof_genre_raw:
-                    logger.debug(a.get_text())
-                    self.story.addToList('unofficialGenre', a.get_text())
+            self.oneshot = data
+
+            self.setGenre(soup)
 
             stats_section = soup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
 
@@ -140,16 +152,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             logger.debug(soup.select_one('#sfContentTitle').get_text())
             return
 
-        #folderlink = 'https://' + self.getSiteDomain() + story_folder.get('href') + '&stories-display=45'
-        #logger.debug(folderlink)
-        #while True:
-        #    soup = self.make_soup(self.get_request(folderlink,usecache=True))
-        #    chapters = soup.select_one('#yw0 > div.items').find_all('div', recursive=False)
-        #    for chapter in chapters:
-        #        a_href = chapter.select_one('span.sf-browse-shortlist-title > a')
-        #        logger.debug('https://' + self.getSiteDomain() + a_href.get('href'))
-        #    break
-
         chapters_container = soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight').parent.find('div', class_='section-content').find_all('div', class_='section-content-list')
         if not chapters_container:
             self.performLogin(self.url)
@@ -161,6 +163,7 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         chapter_url = None
         urls = []
         for chapter_div in chapters_container:
+            # Current 'chapter' does not have a link and is just in bold
             if chapter_div.find('strong'):
                 chapter_url = self.url
                 chapter_title = chapter_div.find('strong').get_text()
@@ -199,7 +202,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         comments = 0
         raw_date_posted = None
         for sup in soups:
-            logger.debug('========================')
             stats_section = sup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
 
             if raw_date_posted:
@@ -212,19 +214,7 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             votes += int(re.search(r'(\d{1,3}(?:,\d{3})*)\svotes?<br/>', stats_section).group(1).replace(',',''))
             logger.debug(views)
 
-            logger.debug("== Tags ==")
-            genre_raw = sup.find('div', class_='section-title', string='Official Tags').parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
-            for a in genre_raw:
-                logger.debug(a.get_text())
-                self.story.addToList('genre', a.get_text())
-
-            logger.debug("== Unofficial Tags ==")
-            unof_genre_raw = sup.find('div', class_='section-title', string='Unofficial Tags')
-            if unof_genre_raw:
-                unof_genre_raw = unof_genre_raw.parent.find('div', class_='section-content').find_all('a',{'class': 'sf-tag'},recursive=True)
-                for a in unof_genre_raw:
-                    logger.debug(a.get_text())
-                    self.story.addToList('unofficialGenre', a.get_text())
+            self.setGenre(sup)
 
         self._setURL(first_url)
         self.story.setMetadata('title', stripHTML(soup.select_one('div.section.sf-storyfolder-link > div.section-title-highlight')))
@@ -234,11 +224,12 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         logger.debug("Posted [%s]"%self.story.getMetadata('datePublished'))
         logger.debug("Updated: [%s]"%self.story.getMetadata('dateUpdated'))
         logger.debug("Unofficial: %s"%self.story.getMetadata('unofficialGenre'))
+        logger.debug("Official: %s"%self.story.getMetadata('genre'))
 
-        self.story.setMetadata('views', views)
-        self.story.setMetadata('faves', faves)
-        self.story.setMetadata('comments', comments)
-        self.story.setMetadata('votes', votes)
+        self.story.setMetadata('views', int(views))
+        self.story.setMetadata('faves', int(faves))
+        self.story.setMetadata('comments', int(comments))
+        self.story.setMetadata('votes', int(votes))
         logger.debug(self.story.getMetadata('views'))
         logger.debug(self.story.getMetadata('faves'))
         logger.debug(self.story.getMetadata('comments'))
@@ -260,7 +251,10 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         if image:
             story.append(image)
         chapter = soup.select_one('#sfContentBody')
-        story.append(chapter)
+        if chapter:
+            story.append(chapter)
+        else:
+            logger.info('No chapter text, only image?')
         return self.utf8FromSoup(url,story)
 
     def before_get_urls_from_page(self,url,normalize):
