@@ -121,13 +121,16 @@ class TestSiteAdapter(BaseSiteAdapter):
             self.story.setMetadata('author',prefix+'Test Author aa')
         self.setDescription(self.url,u'<div>Description '+self.crazystring+u''' Done
 <p>
-Some more longer description.  "I suck at summaries!"  "Better than it sounds!"  "My first fic"
+Some more longer description.  "I suck at summaries!"  "Better than it sounds!" <span>A span!</span>  "My first fic"
 </div>''')
         self.story.setMetadata('datePublished',makeDate("1975-03-15","%Y-%m-%d"))
         if idstr == '669':
             self.story.setMetadata('dateUpdated',datetime.datetime.now())
         else:
             self.story.setMetadata('dateUpdated',makeDate("1975-04-15","%Y-%m-%d"))
+
+        if idstr == '675' and self.totp != "123321" :
+            raise exceptions.NeedTimedOneTimePassword(self.url)
 
         if idstr != '674':
             self.story.setMetadata('numWords','123456')

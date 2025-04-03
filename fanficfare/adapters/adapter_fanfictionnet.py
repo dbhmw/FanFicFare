@@ -110,6 +110,31 @@ class FanFictionNetSiteAdapter(BaseSiteAdapter):
         return re.sub(r"https?://(www|m)\.(?P<keep>fanfiction\.net/s/\d+/\d+/).*",
                       r"https://www.\g<keep>",url)+self.urltitle
 
+    def get_request(self,url):
+        ## use super version if not set or isn't a chapter URL with a
+        ## title.
+        if( not self.getConfig("try_shortened_title_urls") or
+            not re.match(r"https?://www\.fanfiction\.net/s/\d+/\d+/(?P<title>[^/]+)$", url) ):
+            return super(getClass(), self).get_request(url)
+
+        ## kludgey way to attempt more than one URL variant by
+        ## removing title one letter at a time.  Note that network and
+        ## open_pages_in_browser retries still happen first.
+        titlelen = len(url.split('/')[-1])
+        maxcut = min([4,titlelen])
+        j = 0
+        while j < maxcut: # should actually leave loop either by
+                          # return or exception raise.
+            try:
+                useurl = url
+                if j: # j==0, full URL, then remove letters.
+                    useurl = url[:-j]
+                return super(getClass(), self).get_request(useurl)
+            except exceptions.HTTPErrorFFF as fffe:
+                if j >= maxcut or 'Page not found or expired' not in unicode(fffe):
+                    raise
+            j = j+1
+
     def doExtractChapterUrlsAndMetadata(self,get_cover=True):
 
         # fetch the chapter.  From that we will get almost all the
@@ -395,10 +420,6 @@ class FanFictionNetSiteAdapter(BaseSiteAdapter):
         if "Please email this error message in full to <a href='mailto:" in data:
             raise exceptions.FailedToDownload("Error downloading Chapter: %s!  FanFiction.net Site Error!" % url)
 
-        if "FanFiction.Net Message Type 1" in data and "Chapter not found." in data:
-            logger.debug("Chapter not found, trying m.fanfiction.net instead")
-            data = self.get_request(url.replace("www.fanfiction.net","m.fanfiction.net"))
-
         soup = self.make_soup(data)
 
         ## remove inline ads -- only seen with flaresolverr
@@ -406,30 +427,9 @@ class FanFictionNetSiteAdapter(BaseSiteAdapter):
             adtag.decompose()
 
         div = soup.find('div', {'id' : 'storytextp'})
-        if not div:
-            ## m.ffnet version
-            div = soup.find('div', {'id' : 'storycontent'})
-            if div:
-                logger.debug("Using m.fanfiction.net version")
-                ## Make divs id/class match www version for benefit of
-                ## users with custom CSS.  Anyone keeping the in-line
-                ## style and align attrs can deal with it themselves.
-
-                ## from
-                ## <div class="storycontent nocopy" id="storycontent" style="padding:5px 10px 5px 10px;">'
-                ## to
-                ## <div role="main" aria-label="story content" class="storytextp" id="storytextp" align="center" style="padding: 0px 0.5em; user-select: none;">
-                ## <div class="storytext xcontrast_txt nocopy" id="storytext">
-                div['class']=['storytext','xcontrast_txt','nocopy']
-                div['id']='storytext'
-                div = div.wrap(soup.new_tag('div'))
-                div.insert(0,"\n")
-                div.append("\n")
-                div['class']='storytextp'
-                div['id']='storytextp'
 
         if None == div:
-            logger.debug('div id=storytextp (or id=storycontent) not found.  data:%s'%data)
+            logger.debug('div id=storytextp not found.  data:%s'%data)
             raise exceptions.FailedToDownload("Error downloading Chapter: %s!  Missing required element!" % url)
 
         return self.utf8FromSoup(url,div)
