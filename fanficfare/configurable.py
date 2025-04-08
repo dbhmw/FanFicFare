@@ -53,6 +53,7 @@ from . import exceptions
 from . import fetchers
 from .fetchers import fetcher_nsapa_proxy
 from .fetchers import fetcher_flaresolverr_proxy
+from .fetchers import fetcher_driverless_proxy
 
 ## has to be up here for brotli-dict to load correctly.
 from .browsercache import BrowserCache
@@ -71,6 +72,7 @@ from .browsercache import BrowserCache
 # titlepage_entries: category,genre, status,datePublished
 # [overrides]
 # titlepage_entries: category
+
 
 # Work around for fact that py3 apparently doesn't allow/ignore
 # recursive imports like py2 does.
@@ -220,6 +222,7 @@ def get_valid_set_options():
                'use_nsapa_proxy':(None,None,boollist),
                'use_flaresolverr_proxy':(None,None,boollist+['withimages','directimages']),
                'use_flaresolverr_session':(None,None,boollist),
+               'use_driverless_proxy':(None,None,boollist),
 
                ## currently, browser_cache_path is assumed to be
                ## shared and only ffnet uses it so far
@@ -406,6 +409,13 @@ def get_valid_keywords():
                  'flaresolverr_proxy_protocol',
                  'flaresolverr_proxy_timeout',
                  'flaresolverr_session',
+                 'driverless_proxy_address',
+                 'driverless_proxy_port',
+                 'driverless_proxy_cert',
+                 'driverless_proxy_key',
+                 'driverless_proxy_cacert',
+                 'driverless_proxy_session',
+                 'driverless_proxy_retry',
                  'force_cover_image',
                  'force_img_self_referer_regexp',
                  'force_login',
@@ -1169,6 +1179,9 @@ class Configuration(ConfigParser):
             elif self.getConfig('use_cloudscraper',False):
                 logger.debug("use_cloudscraper:%s"%self.getConfig('use_cloudscraper'))
                 fetchcls = fetchers.CloudScraperFetcher
+            elif self.getConfig('use_driverless_proxy',False):
+                logger.debug("use_driverless_proxy:%s"%self.getConfig('use_driverless_proxy'))
+                fetchcls = fetcher_driverless_proxy.Driverless_ProxyFetcher
             else:
                 fetchcls = fetchers.RequestsFetcher
             self.fetcher = fetchcls(self.getConfig,

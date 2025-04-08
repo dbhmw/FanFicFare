@@ -35,7 +35,6 @@ def get_fff_config(url,fileform="epub",personalini=None,key=None):
     configuration = Configuration(sections,fileform)
     configuration.read_file(StringIO(ensure_text(get_resources("plugin-defaults.ini"))))
     configuration.read_file(StringIO(ensure_text(personalini)))
-
     configuration.cryptkey = key
     configuration.encrypted = configuration.get_encrypted_entries()
 
