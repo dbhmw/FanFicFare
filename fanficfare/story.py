@@ -197,6 +197,16 @@ def no_convert_image(url,data):
     except (UnicodeEncodeError, TypeError) as e:
         logger.debug("no_convert_image url:%s - Exception: %s"%(url,str(e)))
 
+    try:
+        from PIL import Image
+        from .six import BytesIO
+        ext = Image.open(BytesIO(data)).format.lower()
+        logger.info("no_convert_image url:%s - from bits got '%s'" % (url, ext))
+    except (IOError, TypeError):
+        raise exceptions.RejectImage("no_convert_image url:%s - not a valid image"%url)
+    except ImportError:
+        pass
+
     if ext not in imagetypes:
         # not found at end of path, try end of whole URL in case of
         # parameter.
