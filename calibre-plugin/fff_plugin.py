@@ -154,6 +154,7 @@ class FanFicFarePlugin(InterfaceAction):
 
     ## for Action Chains
     download_finished_signal = pyqtSignal()
+    update_finished_signal = pyqtSignal()
 
     def genesis(self):
 
@@ -2050,6 +2051,9 @@ class FanFicFarePlugin(InterfaceAction):
             logger.debug(_('Starting auto conversion of %d books.')%(len(all_ids)))
             self.do_status_message(_('Starting auto conversion of %d books.')%(len(all_ids)), 3000)
             self.gui.iactions['Convert Books'].auto_convert_auto_add(all_not_calonly_ids)
+
+        logger.debug("Call self.update_finished_signal.emit()")
+        self.update_finished_signal.emit()
 
     def download_list_completed(self, job, options={},merge=False):
         tdir = job.tdir
