@@ -96,7 +96,8 @@ from calibre_plugins.fanficfare_plugin.dialogs import (
     RejectListDialog, EmailPassDialog, TOTPDialog,
     save_collisions, question_dialog_all,
     RejectUrlEntry, IniTextDialog,
-    EditTextDialog, ModalDialog)
+    EditTextDialog, ModalDialog,
+    ConfigPassDialog)
 
 # because calibre immediately transforms html into zip and don't want
 # to have an 'if html'.  db.has_format is cool with the case mismatch,
@@ -179,6 +180,7 @@ class FanFicFarePlugin(InterfaceAction):
         self.menu.aboutToShow.connect(self.about_to_show_menu)
 
         self.imap_pass = None
+        self.key = None
         self.download_job_manager = DownloadJobManager()
 
     def initialization_complete(self):
@@ -241,6 +243,7 @@ class FanFicFarePlugin(InterfaceAction):
         self.set_popup_mode()
         rejecturllist.clear_cache()
         self.imap_pass = None
+        self.key = None
 
     def rebuild_menus(self):
         with self.menus_lock:
@@ -441,6 +444,12 @@ class FanFicFarePlugin(InterfaceAction):
                                                           shortcut_name=_('Configure FanFicFare'),
                                                           triggered=do_user_config)
 
+            self.encryptionkey_action = self.create_menu_item_ex(self.menu, _('personal.ini Password'),
+                                                             image= 'drm-locked.png',
+                                                             unique_name='Enter Config Password',
+                                                             shortcut_name=_('personal.ini Password'),
+                                                             triggered=self.force_config_pass)
+
             self.about_action = self.create_menu_item_ex(self.menu, _('About FanFicFare'),
                                                          image= 'images/icon.png',
                                                          unique_name='About FanFicFare',
@@ -461,6 +470,12 @@ class FanFicFarePlugin(InterfaceAction):
 
         text = get_resources('about.html').decode('utf-8')
         AboutDialog(self.gui,self.qaction.icon(),self.version + text).exec_()
+
+    def force_config_pass(self, checked):
+        d = ConfigPassDialog(self.gui)
+        d.exec_()
+        if d.status:
+            self.key = d.totp.text()
 
     def editpersonalini(self,checked):
         # Edit personal.ini directly.
@@ -784,7 +799,7 @@ class FanFicFarePlugin(InterfaceAction):
     def get_urls_from_page(self,url,ini_snippet=None):
         ## now returns a {} with at least 'urllist'
         logger.debug("get_urls_from_page URL:%s"%url)
-        configuration = get_fff_config(url,ini_snippet=ini_snippet)
+        configuration = get_fff_config(url,ini_snippet=ini_snippet,key=self.key)
         geturls = GetURLs(configuration,
                           partial(get_fff_config, ini_snippet=ini_snippet))
         return geturls.get_urls_from_page(url)
@@ -1261,6 +1276,7 @@ class FanFicFarePlugin(InterfaceAction):
         logger.debug(self.version)
         options['personal.ini'] = get_fff_personalini()
         options['savemetacol'] = prefs['savemetacol']
+        options['key'] = self.key
 
         #print("prep_downloads:%s"%books)
 
@@ -1434,7 +1450,7 @@ class FanFicFarePlugin(InterfaceAction):
             # book has already been flagged bad for whatever reason.
             return
 
-        adapter = get_fff_adapter(url,fileform,ini_snippet=options.get('ini_snippet',None))
+        adapter = get_fff_adapter(url,fileform,ini_snippet=options.get('ini_snippet',None),key=options['key'])
         ## chapter range for title_chapter_range_pattern
         adapter.setChaptersRange(book['begin'],book['end'])
 
@@ -1942,6 +1958,8 @@ class FanFicFarePlugin(InterfaceAction):
         # pass the plugin path in for jobs.py to use for 'with:' to
         # get libs from plugin zip.
         options['plugin_path'] = self.interface_action_base_plugin.plugin_path
+
+        options['key'] = self.key
 
         args = ['calibre_plugins.fanficfare_plugin.jobs',
                 'do_download_worker_single',
@@ -2655,9 +2673,9 @@ class FanFicFarePlugin(InterfaceAction):
         if prefs['allow_custcol_from_ini']:
             if book['all_metadata'].get('anthology',False):
                 # Anthologies don't need per-story config
-                configuration = get_fff_config(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None))
+                configuration = get_fff_config(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None),key=options['key'])
             else:
-                configuration = get_fff_adapter(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None)).get_configuration()
+                configuration = get_fff_adapter(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None),key=options['key']).get_configuration()
             # meta => custcol[,a|n|r|n_anthaver,r_anthaver]
             # cliches=>\#acolumn,r
             for line in configuration.getConfig('custom_columns_settings').splitlines():
@@ -2828,7 +2846,7 @@ class FanFicFarePlugin(InterfaceAction):
                 setting_name = None
                 if prefs['allow_gc_from_ini']:
                     if not configuration: # might already have it from allow_custcol_from_ini
-                        configuration = get_fff_config(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None))
+                        configuration = get_fff_config(book['url'],options['fileform'],ini_snippet=options.get('ini_snippet',None),key=options['key'])
 
                     for (template,regexp,setting) in configuration.get_generate_cover_settings():
                         value = Template(template).safe_substitute(book['all_metadata'])
@@ -3284,7 +3302,7 @@ The previously downloaded book is still in the anthology, but FFF doesn't have t
         book['comments'] += '</div>'
         # logger.debug(book['comments'])
 
-        configuration = get_fff_config(options.get('anthology_url',''),options['fileform'],ini_snippet=options.get('ini_snippet',None))
+        configuration = get_fff_config(options.get('anthology_url',''),options['fileform'],ini_snippet=options.get('ini_snippet',None),key=options['key'])
         if existingbook:
             book['title'] = deftitle = existingbook['title']
             if prefs['anth_comments_newonly']:
