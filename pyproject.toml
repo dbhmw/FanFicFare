@@ -123,6 +123,7 @@ dependencies = [ # Optional
 # projects.
 [project.optional-dependencies] # Optional
 image_processing = ['Pillow >= 3.3.0']
+config_encryption = ['pycryptodome']
 
 # List URLs that are relevant to your project
 #

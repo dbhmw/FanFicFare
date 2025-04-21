@@ -23,7 +23,7 @@ import codecs
 # py2 vs py3 transition
 from . import six
 from .six.moves import configparser
-from .six.moves.configparser import DEFAULTSECT, ParsingError
+from .six.moves.configparser import DEFAULTSECT, ParsingError, _UNSET
 if six.PY2:
     ConfigParser = configparser.SafeConfigParser
 else: # PY3
@@ -467,7 +467,7 @@ def get_valid_keywords():
 # *known* entry keywords -- or rather regexps for them.
 def get_valid_entry_keywords():
     return list(['%s_(label|format)',
-                 '(default_value|include_in|join_string|keep_in_order)_%s',])
+                 '(default_value|include_in|join_string|keep_in_order|encrypted)_%s',])
 
 def get_valid_list_entries():
     return list(['category',
@@ -606,6 +606,7 @@ class Configuration(ConfigParser):
         self.immutableEntries = get_immutable_entries()
 
         self.url_config_set = False
+        self.encrypted = set()
 
     def section_url_names(self,domain,section_url_f):
         ## domain is passed as a method to limit the damage if/when an
@@ -730,6 +731,14 @@ class Configuration(ConfigParser):
 
         return val
 
+    def get(self, section, option, raw=False, vars=None, fallback=_UNSET):
+        if (section, option) not in self.encrypted or self.cryptconfig.initialized == False:
+            return super(Configuration, self).get(section, option, raw=raw, vars=vars, fallback=fallback)
+        enc_option = 'encrypted_' + option
+        cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars, fallback=fallback)
+        value = self.cryptconfig.get_decrypted(cred, default=cred)
+        return value
+
     # split and strip each.
     def get_config_list(self, sections, key, default=[]):
         ## "%s" to make false > "false"  Rare corner case, probably accidental
@@ -753,6 +762,19 @@ class Configuration(ConfigParser):
             return self.linenos.get(section+','+key,None)
         else:
             return self.linenos.get(section,None)
+
+    def get_encrypted_entries(self):
+        keys = set()
+        for section in self.sectionslist:
+            try:
+                keys.update(
+                    (section, i[len('encrypted_'):]) 
+                    for i in self.options(section) 
+                    if i.startswith('encrypted_')
+                )
+            except (configparser.NoOptionError, configparser.NoSectionError):
+                pass
+        return keys
 
     ## Copied from Python 2.7 library so as to make read utf8.
     def read(self, filenames):
