@@ -18,11 +18,12 @@ from fanficfare.ensure import ensure_text
 
 import configparser
 from collections.abc import MutableSet
+from fanficfare.cryptutils import CryptConfig
 
 def get_fff_personalini():
     return prefs['personal.ini']
 
-def get_fff_config(url,fileform="epub",personalini=None,ini_snippet=None):
+def get_fff_config(url,fileform="epub",personalini=None,ini_snippet=None,key=None):
     if not personalini:
         personalini = get_fff_personalini()
     sections=['unknown']
@@ -37,10 +38,13 @@ def get_fff_config(url,fileform="epub",personalini=None,ini_snippet=None):
         logger.debug("ini_snippet:\n%s"%ini_snippet)
         configuration.read_file(StringIO("[overrides]\n"+ensure_text(ini_snippet)))
 
+    configuration.cryptconfig = CryptConfig(key)
+    configuration.encrypted = configuration.get_encrypted_entries()
+
     return configuration
 
-def get_fff_adapter(url,fileform="epub",personalini=None,ini_snippet=None):
-    return adapters.getAdapter(get_fff_config(url,fileform,personalini,ini_snippet),url)
+def get_fff_adapter(url,fileform="epub",personalini=None,ini_snippet=None,key=None):
+    return adapters.getAdapter(get_fff_config(url,fileform,personalini,ini_snippet,key),url)
 
 def test_config(initext):
     try:
