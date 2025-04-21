@@ -22,7 +22,7 @@ from PyQt5.Qt import (QApplication, QDialog, QWidget, QTableWidget, QTableWidget
                       QHBoxLayout, QGridLayout, QPushButton, QFont, QLabel, QCheckBox, QIcon,
                       QLineEdit, QComboBox, QProgressDialog, QTimer, QDialogButtonBox,
                       QScrollArea, QPixmap, Qt, QAbstractItemView, QTextEdit,
-                      pyqtSignal, QGroupBox, QFrame, QTextCursor)
+                      pyqtSignal, QGroupBox, QFrame, QTextCursor, QPlainTextEdit)
 try:
     # qt6 Calibre v6+
     QTextEditNoWrap = QTextEdit.LineWrapMode.NoWrap
@@ -1772,3 +1772,268 @@ def question_dialog_all(parent, title, msg, det_msg='', show_copy_button=False,
         gprefs.set('questions_to_auto_skip', list(auto_skip))
 
     return ret
+
+class EncryptOptions(SizePersistedDialog):
+    def __init__(self, parent, personalini,
+                 icon=None, title=None, label=None,
+                 use_find=False,
+                 read_only=False,
+                 key=None,
+                 save_size_name='fff:ini encrypt dialog',
+                 ):
+        SizePersistedDialog.__init__(self, parent, save_size_name)
+        from fanficfare.cryptutils import CryptConfig
+        from fanficfare import six
+        self.six = six
+        self.CryptConfig = CryptConfig
+        self.personalini = personalini
+        self.checkboxes = {}
+
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        if title:
+            self.setWindowTitle(title)
+        if icon:
+            self.setWindowIcon(icon)
+
+        row = QHBoxLayout()
+
+        self.encryption_key_label = QLabel("Encryption Key:")
+        self.encryption_key_input = QLineEdit(self)
+        self.encryption_key_input.setEchoMode(QLineEdit.Password)  # Hide input for encryption key
+        if key:
+            self.cryptconfig = self.CryptConfig(key)
+            self.encryption_key_input.setReadOnly(True)
+            self.encryption_key_input.setText(key)
+
+        # Create a button to show the key while held down
+        show_key_button = QPushButton("Show Key", self)
+        show_key_button.pressed.connect(lambda: self.encryption_key_input.setEchoMode(QLineEdit.Normal))
+        show_key_button.released.connect(lambda: self.encryption_key_input.setEchoMode(QLineEdit.Password))
+
+        checkbox_mode = QCheckBox("Decrypt?")
+        checkbox_mode.stateChanged.connect(self.change_method)
+
+        row.addWidget(self.encryption_key_label)
+        row.addWidget(self.encryption_key_input)
+        row.addWidget(show_key_button)
+        row.addWidget(checkbox_mode)
+        self.layout.addLayout(row)
+
+        # mode selector + place‑holders
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["Ini passwords:", "Input password:", "All entries"])
+        self.type_combo.currentIndexChanged.connect(self.update_layout)
+
+        # page0 = QLineEdit + show button
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.pw_show = QPushButton("Show Password")
+        self.pw_show.pressed.connect(lambda: self.password_input.setEchoMode(QLineEdit.Normal))
+        self.pw_show.released.connect(lambda: self.password_input.setEchoMode(QLineEdit.Password))
+
+        # page1 = scrollable grid of checkboxes
+        self.grid_widget = QWidget()
+        self.grid = QGridLayout(self.grid_widget)
+        self.grid.setContentsMargins(10,10,10,10)
+        self.grid.setHorizontalSpacing(20)
+        self.grid.setVerticalSpacing(5)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidget(self.grid_widget)
+
+        # put them into a QStackedLayout‑like manual show/hide
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(self.type_combo)
+        mode_layout.addWidget(self.password_input)
+        mode_layout.addWidget(self.pw_show)
+        mode_layout.addWidget(self.scroll)
+        self.layout.addLayout(mode_layout)
+
+        # submit + output
+        btn = QPushButton("Submit")
+        btn.clicked.connect(self.on_submit)
+        self.layout.addWidget(btn)
+
+        self.output_field = QPlainTextEdit()
+        self.output_field.setReadOnly(True)
+        self.layout.addWidget(self.output_field)
+
+        label = QLabel("User has to copy the values to the personal.ini themselves! The encryption key will disappear after the user changes the library or calibre closes!")
+        self.layout.addWidget(label)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.le_button = QPushButton("personal.ini")
+        button_box.addButton(self.le_button, QDialogButtonBox.ActionRole)
+        self.le_button.clicked.connect(self.open_personalini)
+        self.layout.addWidget(button_box)
+
+        # Cause our dialog size to be restored from prefs or created on first usage
+        self.resize_dialog()
+
+    def on_submit(self):
+        encryption_key = self.encryption_key_input.text()
+
+        if self.type_combo.currentIndex() == 1:
+            credential = self.password_input.text()
+        else:
+            # gather checked INI items
+            credential = {}
+            for cb in self.checkboxes.values():
+                if cb.isChecked():
+                    section, key, value = cb.property("data")
+                    credential.setdefault(section, []).append((key, value))
+
+        if not credential or not encryption_key:
+            self.output_field.setPlainText("Error! Fields cannot be empty.")
+            return
+
+        if not hasattr(self, 'cryptconfig'):
+            self.cryptconfig = self.CryptConfig(encryption_key)
+
+        if self.type_combo.currentIndex() == 1:
+            if self.encrypt:
+                generated_text = self.cryptconfig.get_encrypted(credential, default='Error!')
+            else:
+                generated_text = self.cryptconfig.get_decrypted(credential, default='Error!')
+            if generated_text != 'Error!':
+                self.encryption_key_input.setReadOnly(True)
+        else:
+            generated_text = ''
+            for section, pairs in credential.items():
+                generated_text += '['+section+']\n'
+                for key, value in pairs:
+                    if self.encrypt:
+                        encrypted_text = self.cryptconfig.get_encrypted(value, default='Failed to encrypt the string!')
+                        generated_text += 'encrypted_' + key + ':' + encrypted_text + '\n'
+                        continue
+                    encrypted_text = self.cryptconfig.get_decrypted(value, default='Failed to decrypt the string!')
+                    generated_text += key.replace('encrypted_', '') + ':' + encrypted_text + '\n'
+
+            self.encryption_key_input.setReadOnly(True)
+
+        self.output_field.setPlainText(generated_text)
+
+    def update_layout(self, index):
+        self.output_field.setPlainText('')
+        if index == 1:
+            self.scroll.hide()
+            self.password_input.show()
+            self.pw_show.show()
+            return
+
+        if self.six.PY2:
+            configparser = self.six.moves.configparser.SafeConfigParser
+        else:
+            configparser = self.six.moves.configparser.ConfigParser
+        config = configparser()
+        config.read_file(self.six.StringIO(self.six.ensure_text(self.personalini)))
+        self.password_input.hide()
+        self.pw_show.hide()
+        self.scroll.show()
+        self.valid_entries = dict()
+        for section in config.sections():
+            for key, value in config.items(section):
+                if key in self.relevant_keys or index == 2:
+                    self.valid_entries.setdefault(section, []).append((key, value))
+        self.rebuild_grid()
+
+    def rebuild_grid(self):
+        from math import ceil, floor
+        # clear old
+        for i in reversed(range(self.grid.count())):
+            w = self.grid.itemAt(i).widget()
+            self.grid.removeWidget(w)
+            w.deleteLater()
+        self.checkboxes.clear()
+
+        n = sum(len(pairs) for pairs in self.valid_entries.values())
+        # measure how many rows fit in one column
+        avail_h = self.scroll.viewport().height()
+        sample = QCheckBox("Sample")
+        row_h = sample.sizeHint().height() + self.grid.verticalSpacing()
+        max_single = max(1, floor(avail_h/row_h))
+
+        cols = 1 if n <= max_single else 2
+        rows = ceil(n/cols)
+        i = 0
+        for section, pairs in self.valid_entries.items():
+            for key, value in pairs:
+                col,row = divmod(i, rows)
+                label = section+": "+key
+                cb = QCheckBox(label)
+                cb.setProperty("data", (section, key, value))
+                self.grid.addWidget(cb, row, col)
+                self.checkboxes[label] = cb
+                i += 1
+
+    def change_method(self, state):
+        if state == 2:  # Qt.Checked
+            self.encrypt = False
+            self.relevant_keys = {'encrypted_username', 'encrypted_password', 'encrypted_imap_password', 'encrypted_imap_username'}
+            self.update_layout(self.type_combo.currentIndex())
+        elif state == 0:  # Qt.Unchecked
+            self.encrypt = True
+            self.relevant_keys = {'username', 'password', 'imap_password', 'imap_username'}
+            self.update_layout(self.type_combo.currentIndex())
+
+    def showEvent(self, ev):
+        super(EncryptOptions, self).showEvent(ev)
+        # start in unchecked (index 0)
+        self.change_method(0)
+
+    def open_personalini(self):
+        d = IniTextDialog(self,
+                           self.personalini,
+                           icon=self.windowIcon(),
+                           title=_("Edit personal.ini"),
+                           label=_("Edit personal.ini"),
+                           use_find=True,
+                           save_size_name='fff:personal.ini')
+        d.exec_()
+        if d.result() == d.Accepted:
+            self.personalini = d.get_plain_text()
+            self.update_layout(self.type_combo.currentIndex())
+
+class ConfigPassDialog(QDialog):
+    def __init__(self, gui):
+        QDialog.__init__(self, gui)
+        self.status=False
+
+        self.l = QVBoxLayout()
+        self.setLayout(self.l)
+
+        grid = QGridLayout()
+        self.l.addLayout(grid)
+
+        self.setWindowTitle(_('Password for personal.ini decryptione'))
+        grid.addWidget(QLabel(_("Enter password for the personal.ini:")),0,0,1,2)
+
+        grid.addWidget(QLabel(_("Password:")),2,0)
+        self.totp = QLineEdit(self)
+        self.totp.setEchoMode(QLineEdit.Password)
+        grid.addWidget(self.totp,2,1)
+
+        horz = QHBoxLayout()
+        self.l.addLayout(horz)
+
+        self.ok_button = QPushButton(_('OK'), self)
+        self.ok_button.clicked.connect(self.ok)
+        horz.addWidget(self.ok_button)
+
+        self.cancel_button = QPushButton(_('Cancel'), self)
+        self.cancel_button.clicked.connect(self.cancel)
+        horz.addWidget(self.cancel_button)
+
+        self.resize(self.sizeHint())
+
+    def ok(self):
+        self.status=True
+        self.hide()
+
+    def cancel(self):
+        self.status=False
+        self.hide()

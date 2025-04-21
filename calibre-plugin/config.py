@@ -70,7 +70,7 @@ from calibre_plugins.fanficfare_plugin.prefs import (
 
 from calibre_plugins.fanficfare_plugin.dialogs import (
     UPDATE, UPDATEALWAYS, collision_order, save_collisions, RejectListDialog,
-    EditTextDialog, IniTextDialog, RejectUrlEntry)
+    EditTextDialog, IniTextDialog, RejectUrlEntry, EncryptOptions)
 
 from fanficfare.adapters import getSiteSections, get_section_url
 
@@ -421,6 +421,7 @@ class ConfigWidget(QWidget):
             prefs['reconsolidate_jobs'] = self.other_tab.reconsolidate_jobs.isChecked()
 
             prefs.save_to_db()
+            self.plugin_action.interface_action_base_plugin.actual_plugin_.key = self.personalini_tab.encryption_key
             self.plugin_action.set_popup_mode()
 
     def edit_shortcuts(self):
@@ -811,6 +812,19 @@ class PersonalIniTab(QWidget):
         label.setWordWrap(True)
         horz.addWidget(label)
 
+        vert.addSpacing(5)
+
+        self.encryption_key = self.plugin_action.interface_action_base_plugin.actual_plugin_.key
+        horz = QHBoxLayout()
+        vert.addLayout(horz)
+        self.encrypt_button = QPushButton(_('Encrypt personal.ini'), self)
+        self.encrypt_button.clicked.connect(self.encrypt_entries)
+        horz.addWidget(self.encrypt_button)
+
+        label = QLabel(_("Encrypt selected personal.ini entries with user provided password."))
+        label.setWordWrap(True)
+        horz.addWidget(label)
+
         self.l.addSpacing(5)
 
         groupbox = QGroupBox(_("defaults.ini"))
@@ -921,6 +935,19 @@ class PersonalIniTab(QWidget):
                        label=_('Label (entry_name)'),
                        read_only=True,
                        save_size_name='fff:showcalcols').exec_()
+
+    def encrypt_entries(self):
+        d = EncryptOptions(self,
+                           self.personalini,
+                           icon=self.windowIcon(),
+                           title=_("Encrypt personal.ini"),
+                           label=_("Encrypt personal.ini"),
+                           key=self.encryption_key,
+                           save_size_name='fff:ini encrypt dialog')
+        d.exec_()
+        if d.result() == d.Accepted:
+            self.encryption_key = d.encryption_key_input.text()
+            self.personalini = d.personalini
 
 class ReadingListTab(QWidget):
 
