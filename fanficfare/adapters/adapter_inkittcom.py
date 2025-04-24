@@ -38,10 +38,10 @@ class InkittComSiteAdapter(BaseSiteAdapter):
 
     @classmethod
     def getSiteExampleURLs(cls):
-        return "https://" + cls.getSiteDomain() + "/stories/genre/123456"
+        return "https://" + cls.getSiteDomain() + "/stories/123456"
 
     def getSiteURLPattern(self):
-        return (r"https://(?:www\.)?inkitt\.com/stories/\w+/(?P<id>\d+)")
+        return (r"https://(?:www\.)?inkitt\.com/stories(?:/\w+)?/(?P<id>\d+)")
 
     def performLogin(self):
         if self.getConfig('session_cookie') and self.getConfig('credentials_cookie'):
@@ -201,6 +201,21 @@ class InkittComSiteAdapter(BaseSiteAdapter):
                 self.setCoverImage(url, cover_img)
             except Exception as e:
                 logger.debug("No cover: %s" % str(e))
+
+        tag_json = None
+        script_tags = soup.find_all('script')
+        for script in script_tags:
+            tag_json = re.search(r'globalData\.storyPills = (.+?}]);', str(script))
+            if tag_json != None:
+                tag_dict = json.loads(tag_json.group(1))
+                break
+        else:
+            logger.debug("Couldn't extract the tags")
+
+        if tag_dict:
+            for tag in tag_dict:
+                #logger.debug(tag)
+                self.story.addToList('genre', str(tag['name']))
 
     def getChapterText(self, url):
         logger.debug("Getting chapter text from: %s" % url)
