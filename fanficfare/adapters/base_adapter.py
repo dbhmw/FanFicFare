@@ -77,6 +77,7 @@ class BaseSiteAdapter(Requestable):
 
         self.username = "NoneGiven" # if left empty, site doesn't return any message at all.
         self.password = ""
+        self.totp = None # Timed One Time Password(TOTP) for 2FA
         self.is_adult=False
 
         self.storyDone = False
@@ -875,6 +876,11 @@ class BaseSiteAdapter(Requestable):
             # soup is more difficult than it first appears.  So cheat.
             retval = re.sub("<hr[^>]*>","<div class='center'>* * *</div>",retval)
 
+        if self.getConfig('remove_empty_p'):
+            # Remove <p> tags that contain only whitespace and/or <br>
+            # tags.  Generally for AO3/OTW because their document
+            # converter tends to add them where not intended.
+            retval = re.sub(r"<p[^>]*>\s*(<br/>)*\s*</p>","",retval)
 
         return retval
 

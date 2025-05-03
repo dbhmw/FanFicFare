@@ -49,8 +49,20 @@ class ArchiveOfOurOwnOrgAdapter(BaseOTWAdapter):
         return ['archiveofourown.org',
                 'archiveofourown.com',
                 'archiveofourown.net',
+                'archiveofourown.gay',
                 'download.archiveofourown.org',
                 'download.archiveofourown.com',
                 'download.archiveofourown.net',
                 'ao3.org',
                 ]
+
+    def mod_url_request(self, url):
+        return url
+
+    def mod_url_request(self, url):
+        if self.getConfig("use_archive_transformativeworks_org",False):
+            return url.replace("archiveofourown.org","archive.transformativeworks.org")
+        elif self.getConfig("use_archiveofourown_gay",False):
+            return url.replace("archiveofourown.org","archiveofourown.gay")
+        else:
+            return url

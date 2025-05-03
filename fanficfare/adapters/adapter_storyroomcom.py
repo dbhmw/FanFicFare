@@ -24,17 +24,30 @@ logger = logging.getLogger(__name__)
 from .adapter_storiesonlinenet import StoriesOnlineNetAdapter
 
 def getClass():
-    return FineStoriesComAdapter
+    return StoryRoomComAdapter
 
 # Class name has to be unique.  Our convention is camel case the
 # sitename with Adapter at the end.  www is skipped.
-class FineStoriesComAdapter(StoriesOnlineNetAdapter):
+class StoryRoomComAdapter(StoriesOnlineNetAdapter):
 
     @classmethod
     def getSiteAbbrev(cls):
-        return 'fnst'
+        return 'stryrm'
 
     @staticmethod # must be @staticmethod, don't remove it.
     def getSiteDomain():
         # The site domain.  Does have www here, if it uses it.
-        return 'finestories.com'
+        return 'storyroom.com'
+
+    @classmethod
+    def getAcceptDomains(cls):
+        return ['finestories.com',cls.getSiteDomain()]
+
+    @classmethod
+    def getConfigSections(cls):
+        "Only needs to be overriden if has additional ini sections."
+        return ['finestories.com',cls.getSiteDomain()]
+
+    @classmethod
+    def getSiteURLPattern(self):
+        return r"https?://("+r"|".join([x.replace('.',r'\.') for x in self.getAcceptDomains()])+r")/(?P<path>s|n|library)/(storyInfo.php\?id=)?(?P<id>\d+)(?P<chapter>:\d+)?(?P<title>/.+)?((;\d+)?$|(:i)?$)?"

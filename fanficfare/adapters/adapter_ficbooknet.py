@@ -185,9 +185,15 @@ class FicBookNetAdapter(BaseSiteAdapter):
         #     i=i+len(stripHTML(part).split(' '))
         # self.story.setMetadata('numWords', unicode(i))
 
+        dlinfo = soup.select_one('header.d-flex.flex-column.gap-12.word-break')
 
-        # dlinfo = soup.find('div',{'class':'fanfic-main-info'})
-        dlinfo = soup.select_one('div.d-flex.flex-column.gap-8')
+        series_label = dlinfo.select_one('div.description.word-break').find('strong', string='Серия:')
+        logger.debug('Series: %s'%str(series_label))
+        if series_label:
+            series_div = series_label.find_next_sibling("div")
+            # No accurate series number as for that, additional request needs to be made
+            self.setSeries(stripHTML(series_div.a), 1)
+            self.story.setMetadata('seriesUrl','https://' + self.getSiteDomain() + series_div.a.get('href'))
 
         i=0
         fandoms = dlinfo.select_one('div:not([class])').findAll('a', href=re.compile(r'/fanfiction/\w+'))
@@ -245,7 +251,7 @@ class FicBookNetAdapter(BaseSiteAdapter):
         stats = soup.find('div', {'class':'hat-actions-container'})
         targetdata = stats.find_all('span', {'class' : 'main-info'})
         for data in targetdata:
-            svg_class = data.find('svg')['class'][0] if data.find('svg') else None
+            svg_class = data.find('svg')['class'][1] if data.find('svg') else None
             value = int(stripHTML(data)) if stripHTML(data).isdigit() else 0
 
             if svg_class == 'ic_thumbs-up' and value > 0:

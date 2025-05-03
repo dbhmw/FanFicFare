@@ -31,6 +31,7 @@ from . import six
 from .six.moves.urllib.parse import (urlparse, urlunparse)
 from .six import text_type as unicode
 from .six import string_types as basestring
+from .six import ensure_binary
 
 import bs4
 
@@ -188,6 +189,13 @@ def no_convert_image(url,data):
     parsedUrl = urlparse(url)
 
     ext=parsedUrl.path[parsedUrl.path.rfind('.')+1:].lower()
+
+    try:
+        sample_data = ensure_binary(data[:50])
+        if b'<!doctype html>' in sample_data or b'<!DOCTYPE html>' in sample_data:
+            raise exceptions.RejectImage("no_convert_image url:%s - html site"%url)
+    except (UnicodeEncodeError, TypeError) as e:
+        logger.debug("no_convert_image url:%s - Exception: %s"%(url,str(e)))
 
     if ext not in imagetypes:
         # not found at end of path, try end of whole URL in case of
@@ -744,10 +752,15 @@ class Story(Requestable):
         self.chapter_text_replacements_prepped = False
 
         self.chapter_error_count = 0
+
+        # direct_fetcher is used for downloading image in some case
+        # by using RequestsFetcher instead of the expected fetcher 
         self.direct_fetcher = None
         if self.getConfig('use_flaresolverr_proxy'):
             logger.debug("use_flaresolverr_proxy:%s"%self.getConfig('use_flaresolverr_proxy'))
-        if self.getConfig('use_flaresolverr_proxy') == 'directimages':
+        if self.getConfig('use_browser_cache'):
+            logger.debug("use_browser_cache:%s"%self.getConfig('use_browser_cache'))
+        if self.getConfig('use_flaresolverr_proxy') == 'directimages' or self.getConfig('use_browser_cache') == 'directimages':
             from . import fetchers
             fetcher = fetchers.RequestsFetcher(self.getConfig,
                                                self.getConfigList)
@@ -1544,10 +1557,10 @@ class Story(Requestable):
     def addImgUrl(self,parenturl,url,fetch,cover=None,coverexclusion=None):
         logger.debug("addImgUrl(parenturl=%s,url=%s,cover=%s,coverexclusion=%s"%(parenturl,url,cover,coverexclusion))
 
-        ## flaresolverr can't download images, this directly downloads
-        ## them using RequestsFetcher.
+        ## flaresolverr can't download images and browser_cache can be setup to ignore image,
+        ## so this directly downloads them using RequestsFetcher.
         if self.direct_fetcher:
-            logger.debug("addImgUrl: use_flaresolverr_proxy:directimages")
+            # logger.debug("addImgUrl: using direct_fetcher")
             fetch = self.direct_fetcher
 
         # otherwise it saves the image in the epub even though it
