@@ -18,7 +18,6 @@ from hashlib import sha256
 from zlib import decompress
 from ..six.moves.http_cookiejar import Cookie
 from random import randint
-from http import HTTPStatus
 
 import logging
 logger = logging.getLogger(__name__)
@@ -164,6 +163,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         cookies = []
         if self.cookiejar is None:
             return cookies
+        logger.debug(len(self.cookiejar))
         for cookie in self.cookiejar:
             if cookie.name == '__DriverlessSession__':
                 continue
@@ -207,11 +207,10 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         if response['status_code'] in Driverless_ProxyFetcher.CLOUDFLARE_CODES:
             http_error_msg = "%s Server Error: %s for url: %s" % (response['status_code'], Driverless_ProxyFetcher.CLOUDFLARE_CODES[response['status_code']], url)
         else:
-            reason = HTTPStatus(response['status_code']).phrase
             if 400 <= response["status_code"] < 500:
-                http_error_msg = u'%s Client Error: %s for url: %s' % (response['status_code'], reason, url)
+                http_error_msg = u'%s Client Error. For url: %s' % (response['status_code'], url)
             elif 500 <= response["status_code"] < 600:
-                http_error_msg = u'%s Server Error: %s for url: %s' % (response['status_code'], reason, url)
+                http_error_msg = u'%s Server Error. For url: %s' % (response['status_code'], url)
 
         if http_error_msg:
             raise exceptions.HTTPErrorFFF(url, response["status_code"], http_error_msg, response["content"])
