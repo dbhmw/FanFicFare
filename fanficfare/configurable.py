@@ -561,7 +561,7 @@ def get_valid_keywords():
                  'driverless_proxy_secret',
                  'driverless_proxy_cert',
                  'driverless_proxy_key',
-                 'driverless_proxy_servercert',
+                 'driverless_proxy_cacert',
                  'browser_cache_path',
                  'browser_cache_age_limit',
                  'user_agent',

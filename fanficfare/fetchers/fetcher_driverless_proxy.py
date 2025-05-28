@@ -68,11 +68,12 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         super(Driverless_ProxyFetcher, self).__init__(getConfig_fn, getConfigList_fn)
         try:
             if not Driverless_ProxyFetcher.HOSTNAME:
-                Driverless_ProxyFetcher.HOSTNAME = self.extract_common_name(ssl._ssl._test_decode_cert(self.getConfig("driverless_proxy_servercert")))
-            self.context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=self.getConfig("driverless_proxy_servercert"))
+                Driverless_ProxyFetcher.HOSTNAME = self.extract_common_name(ssl._ssl._test_decode_cert(self.getConfig("driverless_proxy_cacert")))
+                logger.debug(Driverless_ProxyFetcher.HOSTNAME)
+            self.context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH) #, cafile=self.getConfig("driverless_proxy_cacert")
             self.context.load_cert_chain(certfile=self.getConfig("driverless_proxy_cert"), keyfile=self.getConfig("driverless_proxy_key"))
             self.context.verify_mode = ssl.CERT_REQUIRED
-            self.context.load_verify_locations(cafile=self.getConfig("driverless_proxy_servercert"))
+            self.context.load_verify_locations(cafile=self.getConfig("driverless_proxy_cacert"))
         except IOError as e:
             raise IOError('driverless_proxy: Unable to locate certificate files. Have you correctly configured the servercert, cert, and key?')
         self.configurable = self.__dict__["getConfig"].__self__
@@ -163,7 +164,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         cookies = []
         if self.cookiejar is None:
             return cookies
-        logger.debug(len(self.cookiejar))
+
         for cookie in self.cookiejar:
             if cookie.name == '__DriverlessSession__':
                 continue
