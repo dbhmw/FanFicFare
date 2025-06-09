@@ -219,6 +219,7 @@ def get_valid_set_options():
                'use_basic_cache':(None,None,boollist),
                'use_nsapa_proxy':(None,None,boollist),
                'use_flaresolverr_proxy':(None,None,boollist+['withimages','directimages']),
+               'use_flaresolverr_session':(None,None,boollist),
                'use_driverless_proxy':(None,None,boollist),
 
                ## currently, browser_cache_path is assumed to be
@@ -554,6 +555,8 @@ def get_valid_keywords():
                  'flaresolverr_proxy_port',
                  'flaresolverr_proxy_protocol',
                  'flaresolverr_proxy_timeout',
+                 'use_flaresolverr_session',
+                 'flaresolverr_session',
                  'use_driverless_proxy',
                  'driverless_proxy_session',
                  'driverless_proxy_address',
