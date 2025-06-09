@@ -803,7 +803,7 @@ class BaseSiteAdapter(Requestable):
                     # show up differently and doing stripHTML() also
                     # catches <br> etc.
                     soup = BeautifulSoup(unicode(soup),'html5lib')
-                for t in soup.findAll(recursive=True):
+                for t in soup.find_all(recursive=True):
                     for attr in self.get_attr_keys(t):
                         if attr not in acceptable_attributes:
                             del t[attr] ## strip all tag attributes except acceptable_attributes
@@ -880,7 +880,7 @@ class BaseSiteAdapter(Requestable):
             # Remove <p> tags that contain only whitespace and/or <br>
             # tags.  Generally for AO3/OTW because their document
             # converter tends to add them where not intended.
-            retval = re.sub(r"<p[^>]*>\s*(<br/>)*\s*</p>","",retval)
+            retval = re.sub(r"<p[^>]*>\s*(\s*<br ?/?>\s*)*\s*</p>","",retval)
 
         return retval
 

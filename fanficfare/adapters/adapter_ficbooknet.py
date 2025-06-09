@@ -59,7 +59,7 @@ class FicBookNetAdapter(BaseSiteAdapter):
 
         # The date format will vary from site to site.
         # http://docs.python.org/library/datetime.html#strftime-strptime-behavior
-        self.dateformat = "%d %m %Y %H:%M"
+        self.dateformat = u"%d %m %Y г., %H:%M"
 
     @staticmethod # must be @staticmethod, don't remove it.
     def getSiteDomain():
@@ -146,7 +146,7 @@ class FicBookNetAdapter(BaseSiteAdapter):
         pubdate = None
         chapters = soup.find('ul', {'class' : 'list-of-fanfic-parts'})
         if chapters != None:
-            for chapdiv in chapters.findAll('li', {'class':'part'}):
+            for chapdiv in chapters.find_all('li', {'class':'part'}):
                 chapter=chapdiv.find('a',href=re.compile(r'/readfic/'+self.story.getMetadata('storyId')+r"/\d+#part_content$"))
                 churl='https://'+self.host+chapter['href']
 
@@ -179,7 +179,7 @@ class FicBookNetAdapter(BaseSiteAdapter):
         # pr=soup.find('a', href=re.compile(r'/printfic/\w+'))
         # pr='https://'+self.host+pr['href']
         # pr = self.make_soup(self.get_request(pr))
-        # pr=pr.findAll('div', {'class' : 'part_text'})
+        # pr=pr.find_all('div', {'class' : 'part_text'})
         # i=0
         # for part in pr:
         #     i=i+len(stripHTML(part).split(' '))
@@ -196,7 +196,7 @@ class FicBookNetAdapter(BaseSiteAdapter):
             self.story.setMetadata('seriesUrl','https://' + self.getSiteDomain() + series_div.a.get('href'))
 
         i=0
-        fandoms = dlinfo.select_one('div:not([class])').findAll('a', href=re.compile(r'/fanfiction/\w+'))
+        fandoms = dlinfo.select_one('div:not([class])').find_all('a', href=re.compile(r'/fanfiction/\w+'))
         for fandom in fandoms:
             self.story.addToList('category',fandom.string)
             i=i+1
@@ -205,13 +205,13 @@ class FicBookNetAdapter(BaseSiteAdapter):
 
         tags = soup.find('div',{'class':'tags'})
         if tags:
-            for genre in tags.findAll('a',href=re.compile(r'/tags/')):
+            for genre in tags.find_all('a',href=re.compile(r'/tags/')):
                 self.story.addToList('genre',stripHTML(genre))
 
         ratingdt = dlinfo.find('div',{'class':re.compile(r'badge-rating-.*')})
         self.story.setMetadata('rating', stripHTML(ratingdt.find('span')))
 
-        # meta=table.findAll('a', href=re.compile(r'/ratings/'))
+        # meta=table.find_all('a', href=re.compile(r'/ratings/'))
         # i=0
         # for m in meta:
         #     if i == 0:
@@ -228,6 +228,11 @@ class FicBookNetAdapter(BaseSiteAdapter):
             self.story.setMetadata('status', 'Completed')
         else:
             self.story.setMetadata('status', 'In-Progress')
+
+        try:
+            self.story.setMetadata('universe', stripHTML(dlinfo.find('a', href=re.compile('/fandom_universe/'))))
+        except AttributeError:
+            pass
 
         paircharsdt = soup.find('strong',string='Пэйринг и персонажи:')
         # site keeps both ships and indiv chars in /pairings/ links.
