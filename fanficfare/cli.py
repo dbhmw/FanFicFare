@@ -50,7 +50,6 @@ from fanficfare.epubutils import (
 from fanficfare.geturls import get_urls_from_page, get_urls_from_imap
 from fanficfare.six.moves import configparser
 from fanficfare.six import text_type as unicode
-from fanficfare.cryptutils import CryptConfig
 
 def write_story(config, adapter, writeformat,
                 metaonly=False, nooutput=False,
@@ -179,24 +178,22 @@ def mkParser(calibre, parser=None):
                       help='Display version and quit.', )
 
     def encryptPassword(option, opt, value, parser):
-        from fanficfare.cryptutils import CryptConfig
         if parser.values.interactive and not parser.values.dcrpt_key:
-            sys.stdout.write('\nEncryption password needed!\n')
-            key = getpass.getpass(prompt='Password: ')
+            sys.stdout.write('Encryption key needed!\n')
+            key = getpass.getpass(prompt='Key: ')
             parser.values.dcrpt_key = key
-        encrypted_pass = CryptConfig(parser.values.dcrpt_key).get_encrypted(value, default=None)
-
-        if encrypted_pass == None:
-            print("Couldn't generate encrypted password.")
-        else:
-            print(encrypted_pass)
-
+        if value is None:
+            sys.stdout.write('Password to encrypt needed!\n')
+            value = getpass.getpass(prompt='Password: ')
+        encrypted_pass = Configuration.get_encrypted(value, default="Couldn't generate encrypted password.", key=parser.values.dcrpt_key)
+        print(encrypted_pass)
         sys.exit()
 
     parser.add_option('-k', '--key', dest='dcrpt_key', nargs=1,
-                    help='Decryption password for the config.', metavar='<password>')
-    parser.add_option('-x', '--encrypt', type='string', nargs=1, action='callback', callback=encryptPassword,
-                      help='Encrypt the credential with a password for use in the configuration file.', metavar='<credential>')
+                    help='Decryption password for the config.', metavar='<PASSWORD>')
+    parser.add_option('-x', '--encrypt', action='callback', callback=encryptPassword,
+                      help='Encrypt the credential with a password for use in the configuration file.', metavar='[CREDENTIAL]')
+
 
 
     ## undocumented feature for development use.  Save page cache and
@@ -675,7 +672,7 @@ def get_configuration(url,
         key = getpass.getpass(prompt='Password: ')
         options.dcrpt_key = key
 
-    configuration.cryptconfig = CryptConfig(options.dcrpt_key)
+    configuration.cryptkey = options.dcrpt_key
 
     ## do page cache and cookie load after reading INI files because
     ## settings (like use_basic_cache) matter.
