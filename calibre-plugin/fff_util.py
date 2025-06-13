@@ -18,7 +18,6 @@ from fanficfare.ensure import ensure_text
 
 import configparser
 from collections.abc import MutableSet
-from fanficfare.cryptutils import CryptConfig
 
 def get_fff_personalini():
     return prefs['personal.ini']
@@ -38,7 +37,7 @@ def get_fff_config(url,fileform="epub",personalini=None,ini_snippet=None,key=Non
         logger.debug("ini_snippet:\n%s"%ini_snippet)
         configuration.read_file(StringIO("[overrides]\n"+ensure_text(ini_snippet)))
 
-    configuration.cryptconfig = CryptConfig(key)
+    configuration.cryptkey = key
     configuration.encrypted = configuration.get_encrypted_entries()
 
     return configuration
