@@ -20,7 +20,6 @@ from calibre_plugins.fanficfare_plugin.prefs import prefs
 from fanficfare.six import ensure_text
 from fanficfare.six.moves import configparser
 from fanficfare.six.moves import collections_abc
-from fanficfare.cryptutils import CryptConfig
 
 def get_fff_personalini():
     return prefs['personal.ini']
@@ -37,7 +36,7 @@ def get_fff_config(url,fileform="epub",personalini=None,key=None):
     configuration.read_file(StringIO(ensure_text(get_resources("plugin-defaults.ini"))))
     configuration.read_file(StringIO(ensure_text(personalini)))
 
-    configuration.cryptconfig = CryptConfig(key)
+    configuration.cryptkey = key
     configuration.encrypted = configuration.get_encrypted_entries()
 
     return configuration

@@ -75,6 +75,8 @@ from calibre_plugins.fanficfare_plugin.prefs import (
     anthology_collision_order,
     )
 
+from fanficfare.configurable import Configuration
+
 gpstyle='QGroupBox {border:0; padding-top:10px; padding-bottom:0px; margin-bottom:0px;}' #  background-color:red;
 
 class RejectUrlEntry:
@@ -1782,10 +1784,12 @@ class EncryptOptions(SizePersistedDialog):
                  save_size_name='fff:ini encrypt dialog',
                  ):
         SizePersistedDialog.__init__(self, parent, save_size_name)
-        from fanficfare.cryptutils import CryptConfig
         from fanficfare import six
         self.six = six
-        self.CryptConfig = CryptConfig
+        if self.six.PY2:
+            self.configparser = self.six.moves.configparser.SafeConfigParser
+        else:
+            self.configparser = self.six.moves.configparser.ConfigParser
         self.personalini = personalini
         self.checkboxes = {}
 
@@ -1802,7 +1806,6 @@ class EncryptOptions(SizePersistedDialog):
         self.encryption_key_input = QLineEdit(self)
         self.encryption_key_input.setEchoMode(QLineEdit.Password)  # Hide input for encryption key
         if key:
-            self.cryptconfig = self.CryptConfig(key)
             self.encryption_key_input.setReadOnly(True)
             self.encryption_key_input.setText(key)
 
@@ -1891,14 +1894,11 @@ class EncryptOptions(SizePersistedDialog):
             self.output_field.setPlainText("Error! Fields cannot be empty.")
             return
 
-        if not hasattr(self, 'cryptconfig'):
-            self.cryptconfig = self.CryptConfig(encryption_key)
-
         if self.type_combo.currentIndex() == 1:
             if self.encrypt:
-                generated_text = self.cryptconfig.get_encrypted(credential, default='Error!')
+                generated_text = Configuration.get_encrypted(credential, default='Error!', key=encryption_key)
             else:
-                generated_text = self.cryptconfig.get_decrypted(credential, default='Error!')
+                generated_text = Configuration.get_decrypted(credential, default='Error!', key=encryption_key)
             if generated_text != 'Error!':
                 self.encryption_key_input.setReadOnly(True)
         else:
@@ -1907,10 +1907,10 @@ class EncryptOptions(SizePersistedDialog):
                 generated_text += '['+section+']\n'
                 for key, value in pairs:
                     if self.encrypt:
-                        encrypted_text = self.cryptconfig.get_encrypted(value, default='Failed to encrypt the string!')
+                        encrypted_text = Configuration.get_encrypted(value, default='Failed to encrypt the string!', key=encryption_key)
                         generated_text += 'encrypted_' + key + ':' + encrypted_text + '\n'
                         continue
-                    encrypted_text = self.cryptconfig.get_decrypted(value, default='Failed to decrypt the string!')
+                    encrypted_text = Configuration.get_decrypted(value, default='Failed to decrypt the string!', key=encryption_key)
                     generated_text += key.replace('encrypted_', '') + ':' + encrypted_text + '\n'
 
             self.encryption_key_input.setReadOnly(True)
@@ -1925,11 +1925,7 @@ class EncryptOptions(SizePersistedDialog):
             self.pw_show.show()
             return
 
-        if self.six.PY2:
-            configparser = self.six.moves.configparser.SafeConfigParser
-        else:
-            configparser = self.six.moves.configparser.ConfigParser
-        config = configparser()
+        config = self.configparser()
         config.read_file(self.six.StringIO(self.six.ensure_text(self.personalini)))
         self.password_input.hide()
         self.pw_show.hide()

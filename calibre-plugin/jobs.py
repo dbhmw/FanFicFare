@@ -152,6 +152,7 @@ def do_download_for_worker(book,options,merge,notification=lambda x,y:x):
                 return book
 
             book['comment'] = _('Download started...')
+
             configuration = get_fff_config(book['url'],
                                             options['fileform'],
                                             options['personal.ini'],

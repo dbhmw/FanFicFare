@@ -464,17 +464,17 @@ class FanFicFarePlugin(InterfaceAction):
                                                               shortcut_name=_('Configure FanFicFare'),
                                                               triggered=do_user_config)
 
-                self.encryptionkey_action = self.create_menu_item_ex(self.menu, _('personal.ini Password'),
-                                                             image= 'drm-locked.png',
-                                                             unique_name='Enter Config Password',
-                                                             shortcut_name=_('personal.ini Password'),
-                                                             triggered=self.force_config_pass)
-
                 self.about_action = self.create_menu_item_ex(self.menu, _('About FanFicFare'),
                                                              image= 'images/icon.png',
                                                              unique_name='About FanFicFare',
                                                              shortcut_name=_('About FanFicFare'),
                                                              triggered=self.about)
+
+            self.encryptionkey_action = self.create_menu_item_ex(self.menu, _('personal.ini Password'),
+                                            image= 'drm-locked.png',
+                                            unique_name='Enter Config Password',
+                                            shortcut_name=_('personal.ini Password'),
+                                            triggered=self.force_config_pass)
 
             self.gui.keyboard.finalize()
 
