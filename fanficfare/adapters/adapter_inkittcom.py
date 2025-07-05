@@ -142,13 +142,19 @@ class InkittComSiteAdapter(BaseSiteAdapter):
                 .findAll("a")
             ],
         )
+        tag_dict = None
+        tag_json = None
+        script_tags = soup.find_all('script')
+        for script in script_tags:
+            tag_json = re.search(r'globalData\.storyPills = (.+?}]);', str(script))
+            if tag_json != None:
+                for tag in json.loads(tag_json.group(1)):
+                    self.story.addToList('genre', str(tag['name']))
+        else:
+            logger.debug("Couldn't extract the tags")
         logger.debug(self.story.getMetadata("genre"))
 
-        status = stripHTML(book_meta.findChildren("div", recursive=False)[1].find("dd"))
-        if status == "Ongoing":
-            self.story.setMetadata("status", "In-Progress")
-        else:
-            self.story.setMetadata("status", status)
+        self.story.setMetadata("status", stripHTML(book_meta.findChildren("div", recursive=False)[1].find("dd")))
 
         rated = book_meta.findChildren("div", recursive=False)[2].findAll("dd")
         self.story.setMetadata("rating", stripHTML(rated[1]))
@@ -201,21 +207,6 @@ class InkittComSiteAdapter(BaseSiteAdapter):
                 self.setCoverImage(url, cover_img)
             except Exception as e:
                 logger.debug("No cover: %s" % str(e))
-
-        tag_json = None
-        script_tags = soup.find_all('script')
-        for script in script_tags:
-            tag_json = re.search(r'globalData\.storyPills = (.+?}]);', str(script))
-            if tag_json != None:
-                tag_dict = json.loads(tag_json.group(1))
-                break
-        else:
-            logger.debug("Couldn't extract the tags")
-
-        if tag_dict:
-            for tag in tag_dict:
-                #logger.debug(tag)
-                self.story.addToList('genre', str(tag['name']))
 
     def getChapterText(self, url):
         logger.debug("Getting chapter text from: %s" % url)
