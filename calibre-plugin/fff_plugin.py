@@ -39,7 +39,7 @@ from string import Template
 import traceback
 from collections import defaultdict
 
-from PyQt5.Qt import (QApplication, QMenu, QTimer, QToolButton, pyqtSignal)
+from PyQt5.Qt import (QApplication, QMenu, QTimer, QToolButton, pyqtSignal, QEventLoop)
 
 from calibre.ptempfile import PersistentTemporaryFile, PersistentTemporaryDirectory, remove_dir
 from calibre.ebooks.metadata import MetaInformation
@@ -541,11 +541,11 @@ class FanFicFarePlugin(InterfaceAction):
     def update_lists(self,checked,add=True):
         if prefs['addtolists'] or prefs['addtoreadlists']:
             if not self.is_library_view():
-                self.gui.status_bar.show_message(_('Cannot Update Reading Lists from Device View'), 3000)
+                self.do_status_message(_('Cannot Update Reading Lists from Device View'), 3000)
                 return
 
             if len(self.gui.library_view.get_selected_ids()) == 0:
-                self.gui.status_bar.show_message(_('No Selected Books to Update Reading Lists'), 3000)
+                self.do_status_message(_('No Selected Books to Update Reading Lists'), 3000)
                 return
 
             self.update_reading_lists(self.gui.library_view.get_selected_ids(),add)
@@ -590,7 +590,7 @@ class FanFicFarePlugin(InterfaceAction):
 
         try:
             with busy_cursor():
-                self.gui.status_bar.show_message(_('Fetching Story URLs from Email...'),6000)
+                self.do_status_message(_('Fetching Story URLs from Email...'),1000)
                 url_list = get_urls_from_imap(prefs['imapserver'],
                                               prefs['imapuser'],
                                               imap_pass,
@@ -634,7 +634,7 @@ class FanFicFarePlugin(InterfaceAction):
                 notupdate_list = set([x for x in url_list if not self.do_id_search(adapters.getNormalStoryURL(x))])
             url_list = url_list - notupdate_list
 
-            self.gui.status_bar.show_message(_('No Valid Story URLs Found in Unread Emails.'),3000)
+            self.do_status_message(_('No Valid Story URLs Found in Unread Emails.'),3000)
 
         if prefs['download_from_email_immediately']:
             ## do imap fetch w/o GUI elements
@@ -650,7 +650,7 @@ class FanFicFarePlugin(InterfaceAction):
                         'add_tag':prefs['imaptags'],
                         },"\n".join(url_list))
             else:
-                self.gui.status_bar.show_message(_('Finished Fetching Story URLs from Email.'),3000)
+                self.do_status_message(_('Finished Fetching Story URLs from Email.'),3000)
 
         else:
             if url_list:
@@ -707,12 +707,12 @@ class FanFicFarePlugin(InterfaceAction):
                 return
 
         with busy_cursor():
-            self.gui.status_bar.show_message(_('Fetching Story URLs from Page...'))
+            self.do_status_message(_('Fetching Story URLs from Page...'))
 
             frompage = self.get_urls_from_page(url)
             url_list = frompage.get('urllist',[])
 
-            self.gui.status_bar.show_message(_('Finished Fetching Story URLs from Page.'),3000)
+            self.do_status_message(_('Finished Fetching Story URLs from Page.'),3000)
 
         if url_list:
             # make a copy before adding to avoid changing passed param
@@ -737,7 +737,7 @@ class FanFicFarePlugin(InterfaceAction):
     def list_story_urls(self,checked):
         '''Get list of URLs from existing books.'''
         if not self.gui.current_view().selectionModel().selectedRows() :
-            self.gui.status_bar.show_message(_('No Selected Books to Get URLs From'),
+            self.do_status_message(_('No Selected Books to Get URLs From'),
                                              3000)
             return
 
@@ -784,12 +784,12 @@ class FanFicFarePlugin(InterfaceAction):
     def unnew_books(self,checked):
         '''Get list of URLs from existing books.'''
         if not self.is_library_view():
-            self.gui.status_bar.show_message(_('Can only UnNew books in library'),
+            self.do_status_message(_('Can only UnNew books in library'),
                                              3000)
             return
 
         if not self.gui.current_view().selectionModel().selectedRows() :
-            self.gui.status_bar.show_message(_('No Selected Books to Get URLs From'),
+            self.do_status_message(_('No Selected Books to Get URLs From'),
                                              3000)
             return
 
@@ -850,7 +850,7 @@ class FanFicFarePlugin(InterfaceAction):
             changed_ids = [ x['calibre_id'] for x in book_list if x['changed'] ]
             if changed_ids:
                 logger.debug(_('Starting auto conversion of %d books.')%(len(changed_ids)))
-                self.gui.status_bar.show_message(_('Starting auto conversion of %d books.')%(len(changed_ids)), 3000)
+                self.do_status_message(_('Starting auto conversion of %d books.')%(len(changed_ids)), 3000)
                 self.gui.iactions['Convert Books'].auto_convert_auto_add(changed_ids)
 
     def reject_list_urls(self,checked):
@@ -865,7 +865,7 @@ class FanFicFarePlugin(InterfaceAction):
             book_list = [ self.make_book_from_device_row(x) for x in rows ]
 
         if len(book_list) == 0 :
-            self.gui.status_bar.show_message(_('No Selected Books have URLs to Reject'), 3000)
+            self.do_status_message(_('No Selected Books have URLs to Reject'), 3000)
             return
 
         # Progbar because fetching urls from device epubs can be slow.
@@ -941,15 +941,15 @@ class FanFicFarePlugin(InterfaceAction):
     def update_anthology(self,checked,extraoptions={}):
         self.check_valid_collision(extraoptions)
         if not self.get_epubmerge_plugin():
-            self.gui.status_bar.show_message(_('Cannot Make Anthologys without %s')%'EpubMerge 1.3.1+', 3000)
+            self.do_status_message(_('Cannot Make Anthologys without %s')%'EpubMerge 1.3.1+', 3000)
             return
 
         if not self.is_library_view():
-            self.gui.status_bar.show_message(_('Cannot Update Books from Device View'), 3000)
+            self.do_status_message(_('Cannot Update Books from Device View'), 3000)
             return
 
         if len(self.gui.library_view.get_selected_ids()) != 1:
-            self.gui.status_bar.show_message(_('Can only update 1 anthology at a time'), 3000)
+            self.do_status_message(_('Can only update 1 anthology at a time'), 3000)
             return
 
         db = self.gui.current_db
@@ -959,13 +959,13 @@ class FanFicFarePlugin(InterfaceAction):
 
         try:
             with busy_cursor():
-                self.gui.status_bar.show_message(_('Fetching Story URLs for Series...'))
+                self.do_status_message(_('Fetching Story URLs for Series...'))
                 book_id = self.gui.library_view.get_selected_ids()[0]
                 mergebook = self.make_book_id_only(book_id)
                 self.populate_book_from_calibre_id(mergebook, db)
 
                 if not db.has_format(book_id,'EPUB',index_is_id=True):
-                    self.gui.status_bar.show_message(_('Can only Update Epub Anthologies'), 3000)
+                    self.do_status_message(_('Can only Update Epub Anthologies'), 3000)
                     return
 
                 tdir = PersistentTemporaryDirectory(prefix='fff_anthology_')
@@ -996,7 +996,7 @@ class FanFicFarePlugin(InterfaceAction):
 
                 url_list_text = "\n".join(url_list)
 
-                self.gui.status_bar.show_message(_('Finished Fetching Story URLs for Series.'),3000)
+                self.do_status_message(_('Finished Fetching Story URLs for Series.'),3000)
         except NotAnthologyException:
             # using an exception purely to get outside 'with busy_cursor:'
             info_dialog(self.gui, _("Cannot Update Anthology"),
@@ -1071,14 +1071,14 @@ class FanFicFarePlugin(InterfaceAction):
 
     def update_dialog(self,checked,id_list=None,extraoptions={}):
         if not self.is_library_view():
-            self.gui.status_bar.show_message(_('Cannot Update Books from Device View'), 3000)
+            self.do_status_message(_('Cannot Update Books from Device View'), 3000)
             return
 
         if not id_list:
             id_list = self.gui.library_view.get_selected_ids()
 
         if len(id_list) == 0:
-            self.gui.status_bar.show_message(_('No Selected Books to Update'), 3000)
+            self.do_status_message(_('No Selected Books to Update'), 3000)
             return
 
         self.check_valid_collision(extraoptions)
@@ -1183,7 +1183,7 @@ class FanFicFarePlugin(InterfaceAction):
                 win_title=_("Downloading metadata for stories")
                 status_prefix=_("Fetched metadata for")
 
-            self.gui.status_bar.show_message(status_bar, 3000)
+            self.do_status_message(status_bar, 3000)
             LoopProgressDialog(self.gui,
                                books,
                                partial(self.prep_download_loop, options = options, merge=merge),
@@ -1192,7 +1192,7 @@ class FanFicFarePlugin(InterfaceAction):
                                win_title=win_title,
                                status_prefix=status_prefix)
         else:
-            self.gui.status_bar.show_message(_('No valid story URLs entered.'), 3000)
+            self.do_status_message(_('No valid story URLs entered.'), 3000)
         # LoopProgressDialog calls prep_download_loop for each 'good' story,
         # prep_download_loop updates book object for each with metadata from site,
         # LoopProgressDialog calls start_download_job at the end which goes
@@ -1810,15 +1810,9 @@ class FanFicFarePlugin(InterfaceAction):
         # get libs from plugin zip.
         options['plugin_path'] = self.interface_action_base_plugin.plugin_path
 
-        if prefs['single_proc_jobs']: ## YYY Single BG job
-            args = ['calibre_plugins.fanficfare_plugin.jobs',
-                    'do_download_worker_single',
-                    (site, book_list, options, merge)]
-        else: ## MultiBG Job split by site
-            cpus = self.gui.job_manager.server.pool_size
-            args = ['calibre_plugins.fanficfare_plugin.jobs',
-                    'do_download_worker_multiproc',
-                    (site, book_list, options, cpus, merge)]
+        args = ['calibre_plugins.fanficfare_plugin.jobs',
+                'do_download_worker_single',
+                (site, book_list, options, merge)]
         if site:
             desc = _('Download %s FanFiction Book(s) for %s') % (sum(1 for x in book_list if x['good']),site)
         else:
@@ -1833,12 +1827,13 @@ class FanFicFarePlugin(InterfaceAction):
         self.download_job_manager.get_batch(options['tdir']).add_job(site,job)
         job.tdir=options['tdir']
         job.site=site
+        job.orig_book_list = book_list
         # set as part of job, otherwise *changing* reconsolidate_jobs
         # after launch could cause job results to be ignored.
         job.reconsolidate=prefs['reconsolidate_jobs']  # YYY batch update
 
         self.gui.jobs_pointer.start()
-        self.gui.status_bar.show_message(_('Starting %d FanFicFare Downloads')%len(book_list),3000)
+        self.do_status_message(_('Starting %d FanFicFare Downloads')%len(book_list),3000)
 
     def do_mark_series_anthologies(self,mark_anthology_ids):
         if prefs['mark_series_anthologies'] and mark_anthology_ids:
@@ -1983,7 +1978,7 @@ class FanFicFarePlugin(InterfaceAction):
                 self.gui.library_view.sort_by_named_field('marked', True)
 
         logger.debug(_('Finished Adding/Updating %d books.')%(len(update_list) + len(add_list)))
-        self.gui.status_bar.show_message(_('Finished Adding/Updating %d books.')%(len(update_list) + len(add_list)), 3000)
+        self.do_status_message(_('Finished Adding/Updating %d books.')%(len(update_list) + len(add_list)), 3000)
         batch = self.download_job_manager.get_batch(options['tdir'])
         batch.finish_job(options.get('site',None))
         if batch.all_done():
@@ -2019,7 +2014,7 @@ class FanFicFarePlugin(InterfaceAction):
 
         if prefs['autoconvert'] and all_not_calonly_ids:
             logger.debug(_('Starting auto conversion of %d books.')%(len(all_ids)))
-            self.gui.status_bar.show_message(_('Starting auto conversion of %d books.')%(len(all_ids)), 3000)
+            self.do_status_message(_('Starting auto conversion of %d books.')%(len(all_ids)), 3000)
             self.gui.iactions['Convert Books'].auto_convert_auto_add(all_not_calonly_ids)
 
     def download_list_completed(self, job, options={},merge=False):
@@ -2027,10 +2022,27 @@ class FanFicFarePlugin(InterfaceAction):
         site = job.site
         logger.debug("Batch Job:%s %s"%(tdir,site))
         batch = self.download_job_manager.get_batch(tdir)
-        batch.finish_job(site)
+
         if job.failed:
-            self.gui.job_exception(job, dialog_title='Failed to Download Stories')
-            return
+            # logger.debug(job.orig_book_list)
+            ## I don't *think* there would be any harm to modifying
+            ## the original book list, but I elect not to chance it.
+            failedjobresult = copy.deepcopy(job.orig_book_list)
+            for x in failedjobresult:
+                if x['good']:
+                    ## may have failed before reaching BG job.
+                    x['good'] = False
+                    x['status'] = _('Error')
+                    x['added'] = False
+                    x['reportorder'] = x['listorder']+10000000 # force to end.
+                    x['comment'] = _('Background Job Failed, see Calibre Jobs log.')
+                    x['showerror'] = True
+            self.gui.job_exception(job, dialog_title=_('Background Job Failed to Download Stories for (%s)')%job.site)
+            job.result = failedjobresult
+
+        if job.reconsolidate: # YYY batch update
+            logger.debug("batch.finish_job(%s)"%site)
+            batch.finish_job(site)
 
         showsite = None
         # set as part of job, otherwise *changing* reconsolidate_jobs
@@ -2040,7 +2052,7 @@ class FanFicFarePlugin(InterfaceAction):
                 book_list = batch.get_results()
             else:
                 return
-        elif not job.failed:
+        else:
             showsite = site
             book_list = job.result
 
@@ -2053,13 +2065,11 @@ class FanFicFarePlugin(InterfaceAction):
         good_list = [ x for x in book_list if x['good'] ]
         bad_list = [ x for x in book_list if not x['good'] ]
         chapter_error_list = [ x for x in book_list if 'chapter_error_count' in  x ]
-        try:
-            good_list = sorted(good_list,key=lambda x : x['reportorder'])
-            bad_list = sorted(bad_list,key=lambda x : x['reportorder'])
-        except KeyError:
-            good_list = sorted(good_list,key=lambda x : x['listorder'])
-            bad_list = sorted(bad_list,key=lambda x : x['listorder'])
-        #print("book_list:%s"%book_list)
+
+        sort_func = lambda x : x.get('reportorder',x['listorder'])
+        good_list = sorted(good_list,key=sort_func)
+        bad_list = sorted(bad_list,key=sort_func)
+
         payload = (good_list, bad_list, options)
 
         msgl = [ _('FanFicFare found <b>%s</b> good and <b>%s</b> bad updates.')%(len(good_list),len(bad_list)) ]
@@ -2122,6 +2132,15 @@ class FanFicFarePlugin(InterfaceAction):
                                  htmllog,
                                  msgl)
 
+    def do_status_message(self,message,timeout=0):
+        self.gui.status_bar.show_message(message,timeout)
+        try:
+            QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+        except:
+            ## older versions of qt don't have ExcludeUserInputEvents.
+            ## but they also don't need the processEvents() call
+            pass
+
     def do_proceed_question(self, update_func, payload, htmllog, msgl):
         msg = '<p>'+'</p>\n<p>'.join(msgl)+ '</p>\n'
         def proceed_func(*args, **kwargs):
@@ -2149,7 +2168,7 @@ class FanFicFarePlugin(InterfaceAction):
             good_list = sorted(good_list,key=lambda x : x['listorder'])
             bad_list = sorted(bad_list,key=lambda x : x['listorder'])
 
-            self.gui.status_bar.show_message(_('Merging %s books.')%total_good)
+            self.do_status_message(_('Merging %s books.')%total_good)
 
             existingbook = None
             if 'mergebook' in options:
@@ -2244,7 +2263,7 @@ class FanFicFarePlugin(InterfaceAction):
         good_list = sorted(good_list,key=lambda x : x['listorder'])
         bad_list = sorted(bad_list,key=lambda x : x['listorder'])
 
-        self.gui.status_bar.show_message(_('FanFicFare Adding/Updating books.'))
+        self.do_status_message(_('FanFicFare Adding/Updating books.'))
         errorcol_label = self.get_custom_col_label(prefs['errorcol'])
         lastcheckedcol_label = self.get_custom_col_label(prefs['lastcheckedcol'])
 
@@ -2742,7 +2761,7 @@ class FanFicFarePlugin(InterfaceAction):
                     addremovefunc(l,
                                   book_ids,
                                   display_warnings=False,
-                                  refresh_screen=False)
+                                  refresh_screen=True)
                 else:
                     if l != '':
                         message="<p>"+_("You configured FanFicFare to automatically update Reading List '%s', but you don't have a list of that name?")%l+"</p>"
@@ -2761,7 +2780,7 @@ class FanFicFarePlugin(InterfaceAction):
                                                 #add_book_ids,
                                                 book_ids,
                                                 display_warnings=False,
-                                                refresh_screen=False)
+                                                refresh_screen=True)
                 else:
                     if l != '':
                         message="<p>"+_("You configured FanFicFare to automatically update Reading List '%s', but you don't have a list of that name?")%l+"</p>"
@@ -3235,10 +3254,8 @@ class DownloadBatch():
                 iter(j.result)
             except TypeError:
                 # not iterable  abc.Iterable only in newer pythons
-                logger.error("NOT ITER")
                 pass
             else:
-                logger.error("IS ITER")
                 retlist.extend(j.result)
         return retlist
 
