@@ -212,17 +212,14 @@ class InkittComSiteAdapter(BaseSiteAdapter):
         logger.debug("Getting chapter text from: %s" % url)
         soup = self.make_soup(self.get_request(url))
 
-        login_required = soup.find("header", {"class": "login-signup__title"})
-        if login_required and stripHTML(login_required) == "Sign into Inkitt to Continue Reading":
+        if soup.select(".story-page-text_folded"):
             if self.performLogin():
                 soup = self.make_soup(self.get_request(url, usecache=False))
+                if soup.find('button', attrs={'data-next-state': 'signin'}):
+                    raise exceptions.FailedToLogin(url, "Outdated cookies?")
 
         story = soup.find("div", {"id": "chapterText"})
         if story is None:
             raise exceptions.FailedToDownload("Failed to download chapter: %s. The necessary tag is missing." % url)
-
-        login_required = soup.find("header", {"class": "login-signup__title"})
-        if login_required and stripHTML(login_required) == "Sign into Inkitt to Continue Reading":
-            raise exceptions.FailedToLogin(url, "Login unsuccessful. Outdated cookies?")
 
         return self.utf8FromSoup(url, story)
