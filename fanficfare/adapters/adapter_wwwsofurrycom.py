@@ -142,11 +142,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
             self.story.setMetadata('datePublished', chapter_date)
             self.story.setMetadata('dateUpdated', chapter_date)
 
-            self.story.setMetadata('views', int(re.search(r'(\d{1,3}(?:,\d{3})*)\sviews?<br/>', stats_section).group(1).replace(',','')))
-            self.story.setMetadata('faves', int(re.search(r'(\d{1,3}(?:,\d{3})*)\sfav(?:es)?<br/>', stats_section).group(1).replace(',','')))
-            self.story.setMetadata('comments', int(re.search(r'(\d{1,3}(?:,\d{3})*)\scomments?<br/>', stats_section).group(1).replace(',','')))
-            self.story.setMetadata('votes', int(re.search(r'(\d{1,3}(?:,\d{3})*)\svotes?<br/>', stats_section).group(1).replace(',','')))
-
             self.story.setMetadata('numChapters', 1)
             self.add_chapter(soup.select_one('#sfContentTitle').get_text(), self.url)
             logger.debug(soup.select_one('#sfContentTitle').get_text())
@@ -201,10 +196,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
                     soup_chp = self.make_soup(self.get_request(url,usecache=True))
                     soups.append(soup_chp)
 
-        views = 0
-        votes = 0
-        faves = 0
-        comments = 0
         raw_date_posted = None
         for sup in soups:
             stats_section = sup.find('div', class_='section-title', string='Stats').find_next_sibling('div', class_='section-content').decode_contents()
@@ -213,12 +204,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
                 raw_date_updated = re.search(r'Posted\s(.+?)<br/>',stats_section)
             else:
                 raw_date_posted = re.search(r'Posted\s(.+?)<br/>',stats_section)
-            views += int(re.search(r'(\d{1,3}(?:,\d{3})*)\sviews?<br/>', stats_section).group(1).replace(',',''))
-            faves += int(re.search(r'(\d{1,3}(?:,\d{3})*)\sfav(?:es)?<br/>', stats_section).group(1).replace(',',''))
-            comments += int(re.search(r'(\d{1,3}(?:,\d{3})*)\scomments?<br/>', stats_section).group(1).replace(',',''))
-            votes += int(re.search(r'(\d{1,3}(?:,\d{3})*)\svotes?<br/>', stats_section).group(1).replace(',',''))
-            logger.debug(views)
-
             self.setGenre(sup)
 
         self._setURL(first_url)
@@ -230,15 +215,6 @@ class WWWSoFurryComAdapter(BaseSiteAdapter):
         logger.debug("Updated: [%s]"%self.story.getMetadata('dateUpdated'))
         logger.debug("Unofficial: %s"%self.story.getMetadata('unofficialGenre'))
         logger.debug("Official: %s"%self.story.getMetadata('genre'))
-
-        self.story.setMetadata('views', int(views))
-        self.story.setMetadata('faves', int(faves))
-        self.story.setMetadata('comments', int(comments))
-        self.story.setMetadata('votes', int(votes))
-        logger.debug(self.story.getMetadata('views'))
-        logger.debug(self.story.getMetadata('faves'))
-        logger.debug(self.story.getMetadata('comments'))
-        logger.debug(self.story.getMetadata('votes'))
 
     def getChapterText(self, url):
         logger.debug('Getting chapter '+url)
