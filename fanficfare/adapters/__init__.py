@@ -145,6 +145,7 @@ from . import adapter_inkittcom
 from . import adapter_spiritfanfictioncom
 from . import adapter_superlove
 from . import adapter_cfaa
+from . import adapter_althistorycom
 
 ## This bit of complexity allows adapters to be added by just adding
 ## importing.  It eliminates the long if/else clauses we used to need

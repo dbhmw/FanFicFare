@@ -283,10 +283,10 @@ class BaseXenForo2ForumAdapter(BaseSiteAdapter):
             ## data-src, notably for <img> inside <noscript>?
             if img.has_attr('data-src'):
                 img['src'] = img['data-src']
-                logger.debug("img src from data-src:%s"%img)
+                # logger.debug("img src from data-src:%s"%img)
             elif img.has_attr('data-url'):
                 img['src'] = img['data-url']
-                logger.debug("img src from data-url:%s"%img)
+                # logger.debug("img src from data-url:%s"%img)
 
         ## after lazy load images, there are noscript blocks also
         ## containing <img> tags.  The problem comes in when they hit
@@ -842,17 +842,23 @@ class BaseXenForo2ForumAdapter(BaseSiteAdapter):
                 'Time period':'timeperiodtags',
                 }
             for tag in self.get_forumtags(topsoup):
+                # logger.debug(tag)
+                tagname = None
                 tagcat = tag.select_one("i")
+                if tagcat and tagcat.has_attr('title'):
+                    tagname = tagmap.get(tagcat['title'],None)
+                tagtitle = tag.select_one('title')
+                # logger.debug(tagtitle)
+                if tagtitle:
+                    tagname = tagmap.get(stripHTML(tagtitle),None)
+                    tagtitle.decompose()
+
                 tstr = stripHTML(tag)
                 if self.getConfig('capitalize_forumtags'):
                     tstr = title(tstr)
-                if tagcat:
-                    tagname = tagmap.get(tagcat['title'],None)
-                    if tagname:
-                        # logger.debug("Forum Tag(%s) Cat(%s) list(%s)"%(stripHTML(tag),tagcat['title'],tagname))
-                        self.story.addToList(tagname,tstr)
-                    else:
-                        logger.debug("Forum Tag(%s) Cat(%s) tagname not found"%(stripHTML(tag),tagcat['title']))
+                if tagname:
+                    # logger.debug("Forum Tag(%s) list(%s)"%(stripHTML(tag),tagname))
+                    self.story.addToList(tagname,tstr)
                 # else:
                 #     logger.debug("Forum Tag(%s) Uncategorized"%stripHTML(tag))
                 self.story.addToList('forumtags',tstr)
