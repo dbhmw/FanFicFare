@@ -24,17 +24,27 @@ import codecs
 from . import six
 from .six import ensure_binary
 from .six.moves import configparser
-from .six.moves.configparser import DEFAULTSECT, ParsingError, _UNSET
+from .six.moves.configparser import DEFAULTSECT, ParsingError
 if six.PY2:
     ConfigParser = configparser.SafeConfigParser
 else: # PY3
     ConfigParser = configparser.ConfigParser
+    from .six.moves.configparser import _UNSET
 
 if not hasattr(ConfigParser, 'read_file'):
     # read_file added in py3.2, readfp removed in py3.12
     ConfigParser.read_file = ConfigParser.readfp
 
 from .six import string_types as basestring
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
+    from Crypto.Util import Counter
+    _CRYPTODOME_AVAILABLE = True
+except ImportError as e:
+    _CRYPTODOME_AVAILABLE = False
+import hashlib, base64
 
 import logging
 logger = logging.getLogger(__name__)
@@ -61,15 +71,6 @@ from .browsercache import BrowserCache
 # titlepage_entries: category,genre, status,datePublished
 # [overrides]
 # titlepage_entries: category
-
-try:
-    from Crypto.Cipher import AES
-    from Crypto.Random import get_random_bytes
-    from Crypto.Util import Counter
-    _CRYPTODOME_AVAILABLE = True
-except ImportError as e:
-    _CRYPTODOME_AVAILABLE = False
-import hashlib, base64
 
 # Work around for fact that py3 apparently doesn't allow/ignore
 # recursive imports like py2 does.
@@ -741,13 +742,22 @@ class Configuration(ConfigParser):
 
         return val
 
-    def get(self, section, option, raw=False, vars=None, fallback=_UNSET):
-        if (section, option) not in self.encrypted or self.cryptkey == None:
-            return super(Configuration, self).get(section, option, raw=raw, vars=vars, fallback=fallback)
-        enc_option = 'encrypted_' + option
-        cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars, fallback=fallback)
-        value = self.get_decrypted(cred, default=cred, key=self.cryptkey)
-        return value
+    if six.PY2:
+        def get(self, section, option, raw=False, vars=None):
+            if self.cryptkey == None or (section, option) not in self.encrypted:
+                return super(Configuration, self).get(section, option, raw=raw, vars=vars)
+            enc_option = 'encrypted_' + option
+            cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars)
+            value = self.get_decrypted(cred, self.cryptkey, default=cred)
+            return value
+    else:
+        def get(self, section, option, raw=False, vars=None, fallback=_UNSET):
+            if self.cryptkey == None or (section, option) not in self.encrypted:
+                return super(Configuration, self).get(section, option, raw=raw, vars=vars, fallback=fallback)
+            enc_option = 'encrypted_' + option
+            cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars, fallback=fallback)
+            value = self.get_decrypted(cred, self.cryptkey, default=cred)
+            return value
 
     # split and strip each.
     def get_config_list(self, sections, key, default=[]):
@@ -789,7 +799,7 @@ class Configuration(ConfigParser):
     # pick the fastest bytes>int
     if hasattr(int, 'from_bytes'):
         @staticmethod
-        def bytes_to_int(b): # Py3 int.from_bytes is implemented in C
+        def bytes_to_int(b):
             return int.from_bytes(b, byteorder='big')
     else:
         @staticmethod
@@ -800,16 +810,18 @@ class Configuration(ConfigParser):
             return result
 
     @staticmethod
-    def get_encrypted(value, default='', key=None, nonce_lenght=12, salt_lenght=16, key_lenght=32, counter_lenght=128):
+    def get_encrypted(value, key, default='', iterations=600000, nonce_lenght=16, salt_lenght=16, key_lenght=32, counter_lenght=128):
         """
-        Enrypts a base64-encoded string that was encrypted using AES-CTR with a derived key.
+        Encrypts a string using AES-CTR with PBKDF2 key derivation and returns a base64-encoded result.
+        The output format is: base64(nonce + salt + ciphertext). Uses a random nonce and salt for each encryption.
+        Note: There is no authentication tag (MAC) in the output.
 
         Args:
             value (str): The string to encrypt.
+            key (str): The encryption key.
             default (str, optional): The value to return if encryption fails. Defaults to an empty string.
-            key (str, optional): The encryption key. If None, uses `self.key`.
-            tag_length (int, optional): Length of the SHA-256 tag in bytes. Defaults to 32.
-            nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 12.
+            iterations (int, optional): The number of iterations for key derivation. Defaults to 600000.
+            nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 16.
             salt_lenght (int, optional): Length of the salt in bytes. Defaults to 16.
             key_lenght (int, optional): Length of the derived key in bytes. Defaults to 32.
             counter_lenght (int, optional): Bit length of the AES CTR counter. Defaults to 128.
@@ -827,10 +839,10 @@ class Configuration(ConfigParser):
             init_counter = Configuration.bytes_to_int(nonce)
 
             ctr = Counter.new(counter_lenght, prefix=b'', initial_value=init_counter)
-            encr_key = hashlib.pbkdf2_hmac('sha512', ensure_binary(key), salt, 210000, dklen=key_lenght)
+            encr_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, 600000, dklen=key_lenght)
             # PBKDF2(self.key, salt, dkLen=self.key_lenght, count=250000) # Crypto PBKDF2 is very slow on calibre 2.85.1
-            #cipher = AES.new(encr_key, AES.MODE_GCM, nonce=nonce) # MODE_GCM is not supported on calibre 2.85.1
-            #ciphertext, tag = cipher.encrypt_and_digest(pad(value.encode('utf-8'), AES.block_size)) # GCM tag length is 16 bytes
+            # cipher = AES.new(encr_key, AES.MODE_GCM, nonce=nonce) # MODE_GCM is not supported on calibre 2.85.1
+            # ciphertext, tag = cipher.encrypt_and_digest(pad(value.encode('utf-8'), AES.block_size)) # GCM tag length is 16 bytes
             cipher = AES.new(encr_key, AES.MODE_CTR, counter=ctr)
             ciphertext = cipher.encrypt(value.encode('utf-8'))
 
@@ -844,15 +856,15 @@ class Configuration(ConfigParser):
         return default
 
     @staticmethod
-    def get_decrypted(value, default='', key=None, nonce_lenght=12, salt_lenght=16, key_lenght=32, counter_lenght=128):
+    def get_decrypted(value, key, default='', iterations=600000, nonce_lenght=16, salt_lenght=16, key_lenght=32, counter_lenght=128):
         """
-        Decrypts a base64-encoded encrypted string (which contains salt + nonce + tag + ciphertext).
+        Decrypts a base64-encoded string (which contains salt + nonce + tag + ciphertext) encrypted with AES-CTR and PBKDF2 key derivation.
         Args:
             value (str): The encrypted string encoded in base64.
+            key (str): The decryption key to use.
             default (str, optional): The value to return if decryption fails. Defaults to an empty string.
-            key (str, optional): The decryption key to use. If None, uses self.key.
-            tag_length (int, optional): Length of the SHA-256 tag in bytes. Defaults to 32.
-            nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 12.
+            iterations (int, optional): The number of iterations for key derivation. Defaults to 600000.
+            nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 16.
             salt_lenght (int, optional): Length of the salt in bytes. Defaults to 16.
             key_lenght (int, optional): Length of the derived key in bytes. Defaults to 32.
             counter_lenght (int, optional): Bit length of the AES CTR counter. Defaults to 128.
@@ -864,13 +876,9 @@ class Configuration(ConfigParser):
             return default
 
         try:
-            enc = base64.b64decode(value)
+            enc = base64.b64decode(ensure_binary(value))
 
             # Extract components: salt | nonce | tag | ciphertext
-            #nonce = enc_credential[:self.nonce_lenght]
-            #salt = enc_credential[self.nonce_lenght:(self.nonce_lenght+self.salt_lenght)]
-            #tag = enc_credential[(self.nonce_lenght+self.salt_lenght):(self.nonce_lenght+self.salt_lenght+self.tag_length)]
-            #ciphertext = enc_credential[(self.nonce_lenght+self.salt_lenght+self.tag_length):]
             nl, sl = nonce_lenght, salt_lenght
             nonce = enc[0:nl]
             salt = enc[nl:nl+sl]
@@ -882,10 +890,10 @@ class Configuration(ConfigParser):
 
             init_counter = Configuration.bytes_to_int(nonce)
             ctr = Counter.new(counter_lenght, prefix=b'', initial_value=init_counter)
-            dec_key = hashlib.pbkdf2_hmac('sha512', ensure_binary(key), salt, 210000, dklen=key_lenght)
+            dec_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, iterations, dklen=key_lenght)
             # PBKDF2(self.key, salt, dkLen=self.key_lenght, count=250000)
-            #cipher = AES.new(dec_key, AES.MODE_GCM, nonce=nonce)
-            #plaintext = unpad(cipher.decrypt_and_verify(ciphertext, tag), AES.block_size) # Decrypt and verify the message. If verification fails, a ValueError will be raised.
+            # cipher = AES.new(dec_key, AES.MODE_GCM, nonce=nonce)
+            # plaintext = unpad(cipher.decrypt_and_verify(ciphertext, tag), AES.block_size) # Decrypt and verify the message. If verification fails, a ValueError will be raised.
             plaintext = AES.new(dec_key, AES.MODE_CTR, counter=ctr).decrypt(ciphertext)
             default = plaintext.decode('utf-8')
         except Exception as e:

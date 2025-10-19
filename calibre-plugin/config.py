@@ -420,6 +420,8 @@ class ConfigWidget(QWidget):
             prefs['site_split_jobs'] = self.other_tab.site_split_jobs.isChecked()
             prefs['reconsolidate_jobs'] = self.other_tab.reconsolidate_jobs.isChecked()
 
+            prefs['encryption_enabled'] = self.personalini_tab.encryption_enabled
+
             prefs.save_to_db()
             self.plugin_action.interface_action_base_plugin.actual_plugin_.key = self.personalini_tab.encryption_key
             self.plugin_action.set_popup_mode()
@@ -814,7 +816,6 @@ class PersonalIniTab(QWidget):
 
         vert.addSpacing(5)
 
-        self.encryption_key = self.plugin_action.interface_action_base_plugin.actual_plugin_.key
         horz = QHBoxLayout()
         vert.addLayout(horz)
         self.encrypt_button = QPushButton(_('Encrypt personal.ini'), self)
@@ -881,6 +882,9 @@ class PersonalIniTab(QWidget):
 
         self.l.insertStretch(-1)
 
+        self.encryption_enabled = prefs['encryption_enabled']
+        self.encryption_key = self.plugin_action.interface_action_base_plugin.actual_plugin_.key
+
     def show_defaults(self):
         IniTextDialog(self,
                        get_resources('plugin-defaults.ini').decode('utf-8'),
@@ -943,11 +947,13 @@ class PersonalIniTab(QWidget):
                            title=_("Encrypt personal.ini"),
                            label=_("Encrypt personal.ini"),
                            key=self.encryption_key,
+                           enabled=self.encryption_enabled,
                            save_size_name='fff:ini encrypt dialog')
         d.exec_()
         if d.result() == d.Accepted:
-            self.encryption_key = d.encryption_key_input.text()
+            self.encryption_key = d.key
             self.personalini = d.personalini
+            self.encryption_enabled = d.MainCheckbox.isChecked()
 
 class ReadingListTab(QWidget):
 
