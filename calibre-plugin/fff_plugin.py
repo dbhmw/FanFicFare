@@ -449,12 +449,12 @@ class FanFicFarePlugin(InterfaceAction):
                                                              unique_name='About FanFicFare',
                                                              shortcut_name=_('About FanFicFare'),
                                                              triggered=self.about)
-
-            self.encryptionkey_action = self.create_menu_item_ex(self.menu, _('personal.ini Password'),
-                                            image= 'drm-locked.png',
-                                            unique_name='Enter Config Password',
-                                            shortcut_name=_('personal.ini Password'),
-                                            triggered=self.force_config_pass)
+            if prefs['encryption_enabled'] and not self.key:
+                self.encryptionkey_action = self.create_menu_item_ex(self.menu, _('personal.ini Password'),
+                                                image= 'drm-locked.png',
+                                                unique_name='Enter Config Password',
+                                                shortcut_name=_('personal.ini Password'),
+                                                triggered=self.force_config_pass)
 
             self.gui.keyboard.finalize()
 
@@ -475,8 +475,15 @@ class FanFicFarePlugin(InterfaceAction):
     def force_config_pass(self, checked):
         d = ConfigPassDialog(self.gui)
         d.exec_()
-        if d.status:
-            self.key = d.totp.text()
+        if d.result() == d.Accepted:
+            self.key = d.lineEdit.text()
+
+    def get_key(self):
+        if not prefs['encryption_enabled']:
+            return None
+        if not self.key:
+            self.force_config_pass(True)
+        return self.key
 
     def editpersonalini(self,checked):
         # Edit personal.ini directly.
@@ -800,7 +807,7 @@ class FanFicFarePlugin(InterfaceAction):
     def get_urls_from_page(self,url,ini_snippet=None):
         ## now returns a {} with at least 'urllist'
         logger.debug("get_urls_from_page URL:%s"%url)
-        configuration = get_fff_config(url,ini_snippet=ini_snippet,key=self.key)
+        configuration = get_fff_config(url,ini_snippet=ini_snippet,key=self.get_key())
         geturls = GetURLs(configuration,
                           partial(get_fff_config, ini_snippet=ini_snippet))
         return geturls.get_urls_from_page(url)
@@ -1277,7 +1284,8 @@ class FanFicFarePlugin(InterfaceAction):
         logger.debug(self.version)
         options['personal.ini'] = get_fff_personalini()
         options['savemetacol'] = prefs['savemetacol']
-        options['key'] = self.key
+        print('===================00000000000000000000====================')
+        options['key'] = self.get_key()
 
         #print("prep_downloads:%s"%books)
 
@@ -1960,7 +1968,8 @@ class FanFicFarePlugin(InterfaceAction):
         # get libs from plugin zip.
         options['plugin_path'] = self.interface_action_base_plugin.plugin_path
 
-        options['key'] = self.key
+        print('==================11111111111=================')
+        options['key'] = self.get_key()
 
         args = ['calibre_plugins.fanficfare_plugin.jobs',
                 'do_download_worker_single',
