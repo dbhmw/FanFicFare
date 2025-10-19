@@ -204,6 +204,8 @@ default_prefs['reconsolidate_jobs'] = True
 
 default_prefs['ini_snips'] = {} # {'name':{'ini':'code'}} allows for 'comment', etc in future.
 
+default_prefs['encryption_enabled'] = False
+
 def set_library_config(library_config,db,setting=PREFS_KEY_SETTINGS):
     db.prefs.set_namespaced(PREFS_NAMESPACE,
                             setting,
