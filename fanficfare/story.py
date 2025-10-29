@@ -810,6 +810,7 @@ class Story(Requestable):
         self.oldcover=None # (oldcoverhtmlhref,oldcoverhtmltype,oldcoverhtmldata,oldcoverimghref,oldcoverimgtype,oldcoverimgdata)
         self.calibrebookmark=None # cheesy way to carry calibre bookmark file forward across update.
         self.logfile=None # cheesy way to carry log file forward across update.
+        self.archivechapters=[{},[],{}]
 
         self.replacements_prepped = False
         self.chapter_text_replacements_prepped = False
