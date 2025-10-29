@@ -32,6 +32,7 @@ from io import BytesIO
 from xml.dom.minidom import getDOMImplementation
 
 import bs4
+from hashlib import sha1
 
 from .base_writer import BaseStoryWriter
 from ..htmlcleanup import stripHTML,removeEntities
@@ -337,6 +338,17 @@ div { margin: 0pt; padding: 0pt; }
         else:
             self.use_oldcover = False
 
+        generated_hashes = {}
+        for chap in self.story.getChapters():
+            chap_re = re.sub(r"\s+", "", chap['html'], flags=re.UNICODE)
+            new_chap_hash = sha1(ensure_binary(chap_re)).hexdigest()
+            generated_hashes[chap['url']] = (new_chap_hash, chap['index04'])
+            old_hash = self.story.archivechapters[0].get(chap['url'])
+            logger.debug((old_hash,new_chap_hash))
+            if old_hash and old_hash != new_chap_hash and self.story.archivechapters[2] is not None:
+                logger.debug("Hash mismatch on chapter %s"%chap['index04'])
+                self.story.archivechapters[1].append(self.story.archivechapters[2][chap['url']])
+
         ## Python 2.5 ZipFile is rather more primative than later
         ## versions.  It can operate on a file, or on a BytesIO, but
         ## not on an open stream.  OTOH, I suspect we would have had
@@ -552,6 +564,13 @@ div { margin: 0pt; padding: 0pt; }
                                                "scheme":"marc:relators",
                                                },
                                         text="bkp"))
+
+        for chap_url, chap in generated_hashes.items():
+            metadata.appendChild(newTag(contentdom,"meta",
+                                        attrs={"property":"dcterms:identifier",
+                                               "refines":"#file%s"%(chap[1]),
+                                               },
+                                        text="%s:::%s"%(chap_url,chap[0])))
 
         ## end of metadata, create manifest.
         items = [] # list of (id, href, type, title) tuples(all strings)
@@ -821,6 +840,19 @@ div { margin: 0pt; padding: 0pt; }
             spine.appendChild(newTag(contentdom,"itemref",
                                      attrs={"idref":itemref,
                                             "linear":"yes"}))
+
+        for n, archive_page in enumerate(self.story.archivechapters[1], start=1):
+            manifest.appendChild(newTag(contentdom,"item",
+                                        attrs={'id':"archive%04d"%n,
+                                            'href':"OEBPS/archive%04d.xhtml"%n,
+                                            'media-type':'application/xhtml+xml'}))
+            # Should this be written to spine??
+            spine.appendChild(newTag(contentdom,"itemref",
+                            attrs={"idref":"archive%04d"%n,}))
+            outputepub.writestr("OEBPS/archive%04d.xhtml"%n,archive_page)
+            logger.debug("Writing archival page archive%04d"%n)
+        self.story.archivechapters[2] = None
+
         # guide only exists if there's a cover.
         if guide:
             package.appendChild(guide)
