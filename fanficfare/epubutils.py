@@ -324,6 +324,46 @@ def get_update_data(inputio,
     #print("datamaps:%s"%datamaps)
     return (source,filecount,soups,images,oldcover,calibrebookmark,logfile,urlsoups,datamaps)
 
+def get_archive_data(inputio):
+    # Code stolen from 'get_update_data'
+    epub = ZipFile(inputio, 'r')
+    container = epub.read("META-INF/container.xml")
+    containerdom = parseString(container)
+    rootfilenodelist = containerdom.getElementsByTagName("rootfile")
+    rootfilename = rootfilenodelist[0].getAttribute("full-path")
+    contentdom = parseString(epub.read(rootfilename))
+    firstmetadom = contentdom.getElementsByTagName("metadata")[0]
+    relpath = get_path_part(rootfilename)
+
+    extracted_hashes = {}
+    extracted_urls = {}
+    try:
+        metatags = firstmetadom.getElementsByTagName("meta")
+        for tag in metatags:
+            if tag.getAttribute("property") == "dcterms:identifier" and tag.getAttribute("refines").startswith('#file'):
+                chapter_url, hash_ = (tag.childNodes[0].nodeValue).split(':::', 1)
+                if len(hash_) != 40:
+                    raise Exception("Lenght mismatch")
+                extracted_hashes[chapter_url] = hash_
+                extracted_urls[tag.getAttribute("refines")[1:]] = chapter_url
+    except Exception as e:
+        logger.debug(str(e))
+        extracted_hashes = {}
+
+    logger.debug(extracted_urls)
+    archive_files = []
+    original_chapters = {}
+    for item in contentdom.getElementsByTagName("item"):
+        if item.getAttribute("media-type") == "application/xhtml+xml":
+            href = relpath + item.getAttribute("href")
+            if re.match(r'.*/(archive)\d+(_u\d+)?\.x?html',href):
+                archive_files.append(epub.read(href).decode("utf-8"))
+            match = re.match(r'.*/((?:file|chapter)\d+)(?:_u\d+)?\.x?html',href)
+            if match and match.group(1) in extracted_urls:
+                original_chapters[extracted_urls[match.group(1)]] = epub.read(href).decode("utf-8")
+
+    return [extracted_hashes, archive_files, original_chapters]
+
 def get_path_part(n):
     relpath = os.path.dirname(n)
     if( len(relpath) > 0 ):

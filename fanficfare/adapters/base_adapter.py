@@ -98,6 +98,7 @@ class BaseSiteAdapter(Requestable):
 
         self.calibrebookmark = None
         self.logfile = None
+        self.archivechapters = None
         self.ignore_chapter_url_list = None
         self.parsed_QS = None
 
@@ -363,6 +364,8 @@ try to download.</p>
                 self.story.calibrebookmark = self.calibrebookmark
             if self.logfile:
                 self.story.logfile = self.logfile
+            if self.archivechapters:
+                self.story.archivechapters = self.archivechapters
 
         # logger.debug(u"getStory times:\n%s"%self.times)
         return self.story

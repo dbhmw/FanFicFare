@@ -137,7 +137,7 @@ def do_download_for_worker(book,options,merge,notification=lambda x,y:x):
                 UPDATEALWAYS, ADDNEW, SKIP, CALIBREONLY, CALIBREONLYSAVECOL)
         from calibre_plugins.fanficfare_plugin.wordcount import get_word_count
         from fanficfare import adapters, writers
-        from fanficfare.epubutils import get_update_data
+        from fanficfare.epubutils import get_update_data, get_archive_data
         from fanficfare.six import text_type as unicode
 
         from calibre_plugins.fanficfare_plugin.fff_util import get_fff_config
@@ -229,6 +229,7 @@ def do_download_for_worker(book,options,merge,notification=lambda x,y:x):
                 # preserve logfile even on overwrite.
                 if 'epub_for_update' in book:
                     adapter.logfile = get_update_data(book['epub_for_update'])[6]
+                    adapter.archivechapters = get_archive_data(book['epub_for_update'])
                     # change the existing entries id to notid so
                     # write_epub writes a whole new set to indicate overwrite.
                     if adapter.logfile:
@@ -282,6 +283,8 @@ def do_download_for_worker(book,options,merge,notification=lambda x,y:x):
                  adapter.logfile,
                  adapter.oldchaptersmap,
                  adapter.oldchaptersdata) = get_update_data(book['epub_for_update'])[0:9]
+
+                adapter.archivechapters = get_archive_data(book['epub_for_update'])
 
                 # dup handling from fff_plugin needed for anthology updates & BG metadata.
                 if book['collision'] in (UPDATE,UPDATEALWAYS):
