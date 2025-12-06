@@ -74,7 +74,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         return {"content-type": ctype, "content": source, "status_code": int(status), "cookies": cookies}
 
     def encode(self, packet):
-        encoded_packet = (_json.dumps(packet)).encode("utf-8")
+        encoded_packet = packet.encode("utf-8")
         checksum = sha256(encoded_packet).digest()
         b64_checksum = base64.b64encode(checksum)
         b64_packet = base64.b64encode(encoded_packet)
@@ -216,14 +216,24 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             raise NotImplementedError()
         logger.debug(make_log('driverless_ProxyFetcher', method, url, hit='REQ', bar='-'))
 
+        if isinstance(parameters, dict):
+            parameters = _json.dumps(parameters)
+        else:
+            parameters = str(parameters)
+
         is_image = str("Accept" in headers)
         headers.pop('User-Agent', None)
         headers.pop('Accept', None)
-        packet_dict = {'method': method, 'url': url, 'headers': _json.dumps(headers),
-                        'parameters': _json.dumps(parameters), 'image': is_image, 'cookies': _json.dumps(self.get_cookies()),
-                        'session': str(self.get_session()), 'heartbeat': str(self.timeout*0.5)}
+        packet_str = method +\
+            "\x01\x7f\x01" + url +\
+            "\x01\x7f\x01" + _json.dumps(headers) +\
+            "\x01\x7f\x01" + parameters +\
+            "\x01\x7f\x01" + is_image +\
+            "\x01\x7f\x01" + _json.dumps(self.get_cookies()) +\
+            "\x01\x7f\x01" + str(self.get_session()) +\
+            "\x01\x7f\x01" + str(self.timeout*0.5)
 
-        packet = self.encode(packet_dict)
+        packet = self.encode(packet_str)
         response = self.send_request(packet)
 
         if response["cookies"] != "None":
