@@ -77,7 +77,7 @@ class InkittComSiteAdapter(BaseSiteAdapter):
         else:
             raise exceptions.FailedToLogin(self.url, "Login unsuccessful. Missing cookies")
 
-    def extractChapterUrlsAndMetadata(self, get_cover=True):
+    def doExtractChapterUrlsAndMetadata(self, get_cover=True):
         logger.debug("URL: %s", self.url)
         url = self.url
         data = self.get_request(self.url)
@@ -122,18 +122,20 @@ class InkittComSiteAdapter(BaseSiteAdapter):
 
         meta_header = soup.find("header", {"class": "story-header"})
 
-        self.setDescription(url, meta_header.find("p", {"class": "story-summary"}))
+        desc = meta_header.find("p", {"class": "story-summary"})
+        desc['style'] = "white-space: pre-wrap;"
+        self.setDescription(url, desc)
 
         try:
             warns = stripHTML(meta_header.find("p", {"class": "content-labels"}))
             warnings = re.sub("This story contains themes of: ", "", warns).split(", ")
             for warn in warnings:
                 self.story.addToList("warnings", warn)
+            logger.debug(self.story.getMetadata("warnings"))
         except:
-            pass
-        logger.debug(self.story.getMetadata("warnings"))
+            logger.debug("No warnings.")
 
-        book_meta = meta_header.find("div", {"class": "dls"})
+        book_meta = meta_header.find("div", {"id": re.compile(r'^StoryDetails-.+')}).div.div
 
         self.story.extendList(
             "genre",
@@ -142,14 +144,17 @@ class InkittComSiteAdapter(BaseSiteAdapter):
                 .findAll("a")
             ],
         )
+        logger.debug(self.story.getMetadata("genre"))
         tag_dict = None
         tag_json = None
         script_tags = soup.find_all('script')
         for script in script_tags:
             tag_json = re.search(r'globalData\.storyPills = (.+?}]);', str(script))
-            if tag_json != None:
-                for tag in json.loads(tag_json.group(1)):
-                    self.story.addToList('genre', str(tag['name']))
+            if tag_json is None:
+                continue
+            for tag in json.loads(tag_json.group(1)):
+                self.story.addToList('genre', str(tag['name']))
+            break
         else:
             logger.debug("Couldn't extract the tags")
         logger.debug(self.story.getMetadata("genre"))
@@ -165,6 +170,7 @@ class InkittComSiteAdapter(BaseSiteAdapter):
             for text in rated[0].find_all(string=True, recursive=False)
             if text.strip()
         ]
+        logger.debug(avg_rating)
         if avg_rating[0] != "n/a":
             self.story.setMetadata("averrating", float(avg_rating[0]))
             logger.debug(self.story.getMetadata("averrating"))
@@ -200,11 +206,13 @@ class InkittComSiteAdapter(BaseSiteAdapter):
             self.story.setMetadata('plot_rating', round(api_res["plot_rating"], 1))
         logger.debug(self.story.getMetadata("plot_rating"))
 
+        logger.debug(get_cover)
         if get_cover:
             try:
-                cover_img = soup.find("div", {"class": "story-horizontal-cover"})["data-cover-url"]
-                # logger.debug(cover_img)
-                self.setCoverImage(url, cover_img)
+                cover_img = soup.find("div", {"class": "story-horizontal-cover"}).div["style"]
+                cover = re.match(r'background-image:url\((.+)\)' ,cover_img)
+                # logger.debug(cover.group(1))
+                self.setCoverImage(url, cover.group(1))
             except Exception as e:
                 logger.debug("No cover: %s" % str(e))
 
