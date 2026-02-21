@@ -1186,7 +1186,6 @@ class FanFicFarePlugin(InterfaceAction):
         logger.debug(self.version)
         options['personal.ini'] = get_fff_personalini()
         options['savemetacol'] = prefs['savemetacol']
-        print('===================00000000000000000000====================')
         options['key'] = self.get_key()
 
         #print("prep_downloads:%s"%books)
@@ -1842,7 +1841,6 @@ class FanFicFarePlugin(InterfaceAction):
         # get libs from plugin zip.
         options['plugin_path'] = self.interface_action_base_plugin.plugin_path
 
-        print('==================11111111111=================')
         options['key'] = self.get_key()
 
         args = ['calibre_plugins.fanficfare_plugin.jobs',

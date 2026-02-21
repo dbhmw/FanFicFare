@@ -194,8 +194,6 @@ def mkParser(calibre, parser=None):
     parser.add_option('-x', '--encrypt', action='callback', callback=encryptPassword,
                       help='Encrypt the credential with a password for use in the configuration file.', metavar='[CREDENTIAL]')
 
-
-
     ## undocumented feature for development use.  Save page cache and
     ## cookies between runs.  Saves in PWD as files global_cache and
     ## global_cookies
