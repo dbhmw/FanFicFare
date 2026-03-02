@@ -76,7 +76,9 @@ from calibre_plugins.fanficfare_plugin.prefs import (
     anthology_collision_order,
     )
 
+from fanficfare.six import ensure_text
 from fanficfare.configurable import Configuration
+from io import StringIO
 
 gpstyle='QGroupBox {border:0; padding-top:10px; padding-bottom:0px; margin-bottom:0px;}' #  background-color:red;
 
@@ -1935,11 +1937,11 @@ class EncryptOptions(SizePersistedDialog):
                  key=None, enabled=False,
                  save_size_name='fff:ini encrypt dialog',
                  ):
-        from fanficfare import six
         SizePersistedDialog.__init__(self, parent,save_size_name)
         self.personalini = personalini
         self.relevant_keys = ['username', 'password', 'imap_password', 'imap_username']
         self.key = None
+        self.config = None
         self.checkboxes_to_replace = {}
 
         try:
@@ -1949,9 +1951,6 @@ class EncryptOptions(SizePersistedDialog):
             TabPosition = QtGui.QTabWidget.West
             TabShape = QtGui.QTabWidget.Rounded
 
-        configparser = six.moves.configparser.SafeConfigParser
-        self.config = configparser()
-        self.config.read_file(six.StringIO(six.ensure_text(personalini)))
         self.resize(300, 110)
 
         self.DialogLayout = QVBoxLayout(self)
@@ -2129,8 +2128,7 @@ class EncryptOptions(SizePersistedDialog):
 
         self.MainTabs.setCurrentIndex(0)
 
-        self.show_ini_creds()
-        self.advanced_show_ini_creds()
+        self.refresh_ini_creds()
 
         self.MainTabs.hide()
 
@@ -2162,6 +2160,7 @@ class EncryptOptions(SizePersistedDialog):
         d.exec_()
         if d.result() == d.Accepted:
             self.personalini = d.get_plain_text()
+            self.refresh_ini_creds()
 
     def enable_input(self):
         if self.MainCheckbox.isChecked():
@@ -2246,7 +2245,7 @@ class EncryptOptions(SizePersistedDialog):
                 if not widgets['checkbox'].isChecked():
                     continue
 
-                encrypted_cred = Configuration.get_encrypted(widgets['checkbox'].config_value, self.key, default='Error!')
+                encrypted_cred = self.config.get_encrypted(widgets['checkbox'].config_value, self.key, default='Error!')
                 final_string = "encrypted_" + widgets['checkbox'].text() + ": " + encrypted_cred
 
                 self.PassDisplayGrouBoxLayout.removeWidget(widgets['checkbox'])
@@ -2290,11 +2289,11 @@ class EncryptOptions(SizePersistedDialog):
                 result[section] = pairs
 
         return result
-    
+
     def get_crypt_str(self, cred):
         if self.EncOrDecRadioButton.isChecked():
-            return Configuration.get_encrypted(cred, self.key, default='Error!')
-        return Configuration.get_decrypted(cred, self.key, default='Error!')
+            return self.config.get_encrypted(cred, self.key, default='Error!')
+        return self.config.get_decrypted(cred, self.key, default='Error!')
 
     def advanced_tree_encrypt_entries(self):
         with busy_cursor():
@@ -2308,6 +2307,23 @@ class EncryptOptions(SizePersistedDialog):
     def advanced_encrypt_str(self):
         encrypted_cred = self.get_crypt_str(self.InputStringLine.text())
         self.OutputStringLine.setText(encrypted_cred)
+
+    def refresh_ini_creds(self):
+        # self.config.clear()
+        del self.config
+        self.config = Configuration(['unknown'],'epub')
+        self.config.read_file(StringIO(ensure_text(self.personalini)))
+
+        while self.PassDisplayGrouBoxLayout.count():
+            item = self.PassDisplayGrouBoxLayout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self.ConfigInATree.clear()
+        self.checkboxes_to_replace.clear()
+
+        self.show_ini_creds()
+        self.advanced_show_ini_creds()
 
 class ConfigPassDialog(QDialog):
     def __init__(self, gui):
