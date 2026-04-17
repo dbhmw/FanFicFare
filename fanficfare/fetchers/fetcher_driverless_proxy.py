@@ -19,6 +19,7 @@ from ..six.moves.http_cookiejar import Cookie
 
 import socket,base64,ssl,time
 import json as _json
+import weakref
 from hashlib import sha256
 from zlib import decompress
 from random import randint
@@ -26,8 +27,9 @@ from random import randint
 import logging
 logger = logging.getLogger(__name__)
 
+_sessions = weakref.WeakKeyDictionary()
+
 class Driverless_ProxyFetcher(RequestsFetcher):
-    CHUNK_SIZE = 8192
     CLOUDFLARE_CODES = {520: "Web Server Returned an Unknown Error", 521: "Web Server Is Down",  522: "Connection Timed Out", 523: "Origin Is Unreachable", 524: "A Timeout Occurred", 525: "SSL Handshake Failed", 526: "Invalid SSL Certificate", 530: "1xxx Error"}
 
     def __init__(self, getConfig_fn, getConfigList_fn):
@@ -50,7 +52,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         if not checksum or len(checksum) < 32:
             raise socket.error("Connection interrupted.")
 
-        content = decompress(packet[44:-1])
+        content = decompress(packet[44:-9])
         if not checksum == sha256(content).digest():
             raise ValueError("Verification failed. Message is corrupted.")
         offsets = content[:18].decode('utf-8')
@@ -82,22 +84,17 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         return packet
 
     def get_session(self):
-        for cookie in self.get_cookiejar():
-            if cookie.name == '__DriverlessSession__':
-                self.session_cookie = cookie
-                return cookie._rest['session']
-        cookie = Cookie(
-            version=0, name='__DriverlessSession__', value='__None__', domain='', path='/',
-            port=None, port_specified=False, domain_specified=False,  domain_initial_dot=False,
-            path_specified=False, secure=False, expires=None, discard=False, comment=None, comment_url=None,
-            rest={
-                'HttpOnly': True,
-                'session': str(self.getConfig("driverless_proxy_session", None) or randint(0,4294967295)),
-            }
+        jar = self.get_cookiejar()
+        if jar in _sessions:
+            return _sessions[jar]
+
+        session_id = str(
+            self.getConfig("driverless_proxy_session", None)
+            or randint(0, 4294967295)
         )
-        self.cookiejar.set_cookie(cookie)
-        self.session_cookie = cookie
-        return cookie._rest['session']
+        _sessions[jar] = session_id
+
+        return session_id
 
     def get_cookies(self):
         cookies = []
@@ -105,9 +102,6 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             return cookies
 
         for cookie in self.cookiejar:
-            if cookie.name == '__DriverlessSession__':
-                continue
-
             cookies.append({
                 'name': cookie.name,
                 'value': cookie.value,
@@ -168,7 +162,6 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ssl_s = self.context.wrap_socket(conn, server_side=False)
             ssl_s.connect(self.address)
-            #logger.debug("SSL established. Peer: {}".format(s.getpeercert()))
         except (socket.error, ssl.SSLError):
             raise RuntimeError('driverless_proxy unavailable, connection error %s %s'%self.address)
 
@@ -179,24 +172,22 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             ssl_s.settimeout(self.timeout)
             logger.debug("Receive the response from the server. Timeout(%s)", str(self.timeout))
             while response["status_code"] == -400:
-                chunks = []
-                prev_tail = b""
+                buf = bytearray()
                 while True:
-                    chunk = ssl_s.recv(Driverless_ProxyFetcher.CHUNK_SIZE)
+                    chunk = ssl_s.recv(16384)
                     if not chunk:
                         logger.debug('No data received, closing socket.')
                         response["status_code"] = -1
                         break
-                    chunks.append(chunk)
+                    buf.extend(chunk)
 
-                    if end_marker in (prev_tail + chunk):
+                    # Only check the tail for the marker, not the whole buffer
+                    if len(buf) >= len(end_marker) and buf[-len(end_marker):] == end_marker:
                         logger.debug("End of data received.")
                         break
-                    # Update prev_tail to the last len(end_marker)-1 of current chunk.
-                    prev_tail = chunk[-(len(end_marker) - 1):]
-                data = b"".join(chunks)
 
-                response = self.decode(data)
+                if response["status_code"] != -1:
+                    response = self.decode(bytes(buf))
         except (socket.error, ssl.SSLError) as e:
             logger.debug(e)
         finally:
@@ -204,7 +195,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
                 try:
                     ssl_s.shutdown(socket.SHUT_RDWR)
                 except socket.error as e:
-                    logger.debug(e) # Ignore "not connected" errors
+                    logger.debug(e)
                 ssl_s.close()
             if conn:
                 conn.close()
