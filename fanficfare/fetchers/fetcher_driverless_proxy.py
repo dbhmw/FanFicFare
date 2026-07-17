@@ -102,25 +102,39 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             return cookies
 
         for cookie in self.cookiejar:
-            cookies.append({
+            _cookie = {
                 'name': cookie.name,
-                'value': cookie.value,
+                'value': cookie.value or "",
                 'domain': cookie.domain,
                 'path': cookie.path,
-                'expires': cookie.expires if cookie.expires else -1,
+                'expires': cookie.expires if cookie.expires is not None else -1,
                 'secure': cookie.secure,
-                'httpOnly': cookie._rest is not None and cookie.has_nonstandard_attr('HttpOnly'),
-            })
+                'httpOnly': cookie.has_nonstandard_attr('HttpOnly'),
+                'session': cookie.discard or cookie.expires is None,
+            }
+            if same_site := cookie.get_nonstandard_attr('SameSite'):
+                _cookie['sameSite'] = same_site
+            if part := cookie.get_nonstandard_attr('PartitionKey'):
+                _cookie['partitionKey'] = _json.loads(part)
+            cookies.append(_cookie)
         return cookies
 
     def save_cookies(self, cookies):
         cookies_list = _json.loads(cookies)
         for cookie in cookies_list:
-            _cookie = Cookie(version=0, name=str(cookie["name"]), value=str(cookie["value"]), port=None, port_specified=False,
+            rest = {}
+            if cookie.get("httpOnly"):
+                rest["HttpOnly"] = None
+            if cookie.get("sameSite"):
+                rest["SameSite"] = str(cookie["sameSite"])
+            if cookie.get("partitionKey"):
+                rest["PartitionKey"] = _json.dumps(cookie["partitionKey"])
+
+            _cookie = Cookie(
+                version=0, name=str(cookie["name"]), value=str(cookie["value"]), port=None, port_specified=False,
                 domain=str(cookie["domain"]), domain_specified=True, domain_initial_dot=cookie["domain"].startswith('.'),
-                path=str(cookie["path"]), path_specified=bool(cookie["path"]),
-                secure=cookie["secure"], expires=str(cookie["expires"]), discard=False,
-                comment=None, comment_url=None, rest={},
+                path=str(cookie["path"]), path_specified=bool(cookie["path"]), secure=cookie["secure"],
+                expires=str(cookie["expires"]), discard=False, comment=None, comment_url=None, rest=rest,
             )
             self.get_cookiejar().set_cookie(_cookie)
 
