@@ -40,7 +40,6 @@ from .six import string_types as basestring
 try:
     from Crypto.Cipher import AES
     from Crypto.Random import get_random_bytes
-    from Crypto.Util import Counter
     _CRYPTODOME_AVAILABLE = True
 except ImportError as e:
     _CRYPTODOME_AVAILABLE = False
@@ -772,22 +771,13 @@ class Configuration(ConfigParser):
         self.cached_config[(tuple(sections),key)] = val
         return val
 
-    if six.PY2:
-        def get(self, section, option, raw=False, vars=None):
-            if self.cryptkey == None or (section, option) not in self.encrypted:
-                return super(Configuration, self).get(section, option, raw=raw, vars=vars)
-            enc_option = 'encrypted_' + option
-            cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars)
-            value = self.get_decrypted(cred, self.cryptkey, default=cred)
-            return value
-    else:
-        def get(self, section, option, raw=False, vars=None, fallback=_UNSET):
-            if self.cryptkey == None or (section, option) not in self.encrypted:
-                return super(Configuration, self).get(section, option, raw=raw, vars=vars, fallback=fallback)
-            enc_option = 'encrypted_' + option
-            cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars, fallback=fallback)
-            value = self.get_decrypted(cred, self.cryptkey, default=cred)
-            return value
+    def get(self, section, option, raw=False, vars=None, fallback=_UNSET):
+        if self.cryptkey == None or (section, option) not in self.encrypted:
+            return super(Configuration, self).get(section, option, raw=raw, vars=vars, fallback=fallback)
+        enc_option = 'encrypted_' + option
+        cred = super(Configuration, self).get(section, enc_option, raw=raw, vars=vars, fallback=fallback)
+        value = self.get_decrypted(cred, self.cryptkey, default=cred)
+        return value
 
     # split and strip each.
     def get_config_list(self, sections, key, default=[]):
@@ -826,21 +816,8 @@ class Configuration(ConfigParser):
                 pass
         return keys
 
-    # pick the fastest bytes>int
-    if hasattr(int, 'from_bytes'):
-        @staticmethod
-        def bytes_to_int(b):
-            return int.from_bytes(b, byteorder='big')
-    else:
-        @staticmethod
-        def bytes_to_int(b): # fallback for Py2
-            result = 0
-            for char in b:
-                result = (result << 8) + (char if isinstance(char, int) else ord(char))
-            return result
-
     @staticmethod
-    def get_encrypted(value, key, default='', iterations=600000, nonce_lenght=16, salt_lenght=16, key_lenght=32, counter_lenght=128):
+    def get_encrypted(value, key, default='', iterations=600000, nonce_length=16, salt_length=16, key_length=32):
         """
         Encrypts a string using AES-CTR with PBKDF2 key derivation and returns a base64-encoded result.
         The output format is: base64(nonce + salt + ciphertext). Uses a random nonce and salt for each encryption.
@@ -851,10 +828,9 @@ class Configuration(ConfigParser):
             key (str): The encryption key.
             default (str, optional): The value to return if encryption fails. Defaults to an empty string.
             iterations (int, optional): The number of iterations for key derivation. Defaults to 600000.
-            nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 16.
-            salt_lenght (int, optional): Length of the salt in bytes. Defaults to 16.
-            key_lenght (int, optional): Length of the derived key in bytes. Defaults to 32.
-            counter_lenght (int, optional): Bit length of the AES CTR counter. Defaults to 128.
+            nonce_length (int, optional): Length of the nonce in bytes. Defaults to 16.
+            salt_length (int, optional): Length of the salt in bytes. Defaults to 16.
+            key_length (int, optional): Length of the derived key in bytes. Defaults to 32.
 
         Returns:
             str: The base64-encoded encrypted string (nonce + salt + tag + ciphertext) string if successful; otherwise, returns the `default` value.
@@ -864,29 +840,21 @@ class Configuration(ConfigParser):
             return default
 
         try:
-            nonce = get_random_bytes(nonce_lenght)
-            salt = get_random_bytes(salt_lenght)
-            init_counter = Configuration.bytes_to_int(nonce)
+            salt = get_random_bytes(salt_length)
+            nonce = get_random_bytes(nonce_length)
+            enc_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, iterations, dklen=key_length)
+            cipher = AES.new(enc_key, AES.MODE_EAX, nonce=nonce)
+            ciphertext, tag = cipher.encrypt_and_digest(value.encode('utf-8')) # tag is 16 bytes
 
-            ctr = Counter.new(counter_lenght, prefix=b'', initial_value=init_counter)
-            encr_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, 600000, dklen=key_lenght)
-            # PBKDF2(self.key, salt, dkLen=self.key_lenght, count=250000) # Crypto PBKDF2 is very slow on calibre 2.85.1
-            # cipher = AES.new(encr_key, AES.MODE_GCM, nonce=nonce) # MODE_GCM is not supported on calibre 2.85.1
-            # ciphertext, tag = cipher.encrypt_and_digest(pad(value.encode('utf-8'), AES.block_size)) # GCM tag length is 16 bytes
-            cipher = AES.new(encr_key, AES.MODE_CTR, counter=ctr)
-            ciphertext = cipher.encrypt(value.encode('utf-8'))
-
-            tag = hashlib.sha256(ciphertext).digest()
-
-            encrypted_blob = nonce + salt + tag + ciphertext
-            default = base64.b64encode(encrypted_blob).decode('utf-8') # Return the nonce, salt, tag and ciphertext, all base64 encoded
+            encrypted_blob = salt + nonce + tag + ciphertext
+            default = base64.b64encode(encrypted_blob).decode('utf-8')
         except Exception as e:
             logger.debug("Failed to encrypt credential: "+str(e))
 
         return default
 
     @staticmethod
-    def get_decrypted(value, key, default='', iterations=600000, nonce_lenght=16, salt_lenght=16, key_lenght=32, counter_lenght=128):
+    def get_decrypted(value, key, default='', iterations=600000, nonce_length=16, salt_length=16, key_length=32):
         """
         Decrypts a base64-encoded string (which contains salt + nonce + tag + ciphertext) encrypted with AES-CTR and PBKDF2 key derivation.
         Args:
@@ -897,7 +865,6 @@ class Configuration(ConfigParser):
             nonce_lenght (int, optional): Length of the nonce in bytes. Defaults to 16.
             salt_lenght (int, optional): Length of the salt in bytes. Defaults to 16.
             key_lenght (int, optional): Length of the derived key in bytes. Defaults to 32.
-            counter_lenght (int, optional): Bit length of the AES CTR counter. Defaults to 128.
         Returns:
             str: The decrypted string if successful; otherwise, returns the default value.
         """
@@ -906,25 +873,17 @@ class Configuration(ConfigParser):
             return default
 
         try:
-            enc = base64.b64decode(ensure_binary(value))
+            encrypted_blob = base64.b64decode(ensure_binary(value))
 
-            # Extract components: salt | nonce | tag | ciphertext
-            nl, sl = nonce_lenght, salt_lenght
-            nonce = enc[0:nl]
-            salt = enc[nl:nl+sl]
-            tag  = enc[nl+sl:nl+sl+32] # Tag lenght genereted by get_encrypted will always be 32
-            ciphertext = enc[nl+sl+32:]
+            salt = encrypted_blob[:salt_length]
+            nonce = encrypted_blob[salt_length:salt_length + nonce_length]
+            tag = encrypted_blob[salt_length + nonce_length:salt_length + nonce_length + 16]
+            ciphertext = encrypted_blob[salt_length + nonce_length + 16:]
 
-            if hashlib.sha256(ciphertext).digest() != tag:
-                raise ValueError("Integrity check failed: tag does not match.")
+            dec_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, iterations, dklen=key_length)
+            cipher = AES.new(dec_key, AES.MODE_EAX, nonce=nonce)
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
 
-            init_counter = Configuration.bytes_to_int(nonce)
-            ctr = Counter.new(counter_lenght, prefix=b'', initial_value=init_counter)
-            dec_key = hashlib.pbkdf2_hmac('sha256', ensure_binary(key), salt, iterations, dklen=key_lenght)
-            # PBKDF2(self.key, salt, dkLen=self.key_lenght, count=250000)
-            # cipher = AES.new(dec_key, AES.MODE_GCM, nonce=nonce)
-            # plaintext = unpad(cipher.decrypt_and_verify(ciphertext, tag), AES.block_size) # Decrypt and verify the message. If verification fails, a ValueError will be raised.
-            plaintext = AES.new(dec_key, AES.MODE_CTR, counter=ctr).decrypt(ciphertext)
             default = plaintext.decode('utf-8')
         except Exception as e:
             logger.debug("Failed to decrypt credential: %s"%str(e))

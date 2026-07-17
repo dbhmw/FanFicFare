@@ -2270,6 +2270,8 @@ class EncryptOptions(SizePersistedDialog):
             __qtreewidget_website.setText(0, section)
 
             for key, value in self.config.items(section):
+                if key == '__name__':
+                    continue
                 __qtreewidget_config = QtGui.QTreeWidgetItem(__qtreewidget_website)
                 __qtreewidget_config.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                 __qtreewidget_config.setText(0, key)
