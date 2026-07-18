@@ -340,7 +340,9 @@ div { margin: 0pt; padding: 0pt; }
 
         generated_hashes = {}
         for chap in self.story.getChapters():
-            chap_re = re.sub(r"\s+", "", chap['html'], flags=re.UNICODE)
+            if chap['only_html'] is None:
+                continue
+            chap_re = re.sub(r"\s+", "", chap['only_html'], flags=re.UNICODE)
             new_chap_hash = sha1(ensure_binary(chap_re)).hexdigest()
             generated_hashes[chap['url']] = (new_chap_hash, chap['index04'])
             old_hash = self.story.archivechapters[0].get(chap['url'])

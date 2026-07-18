@@ -584,6 +584,8 @@ class BaseOTWAdapter(BaseSiteAdapter):
             chtext.extract()
         save_chapter.append(text)
 
+        self.story.add_raw_chapter(text, index=index)
+
         foot_notes_div = append_tag(save_chapter,'div',classes="fff_chapter_notes fff_foot_notes")
         ## Can appear on every chapter
         if 'chapterfootnotes' not in exclude_notes:

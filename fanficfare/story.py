@@ -812,6 +812,7 @@ class Story(Requestable):
         self.calibrebookmark=None # cheesy way to carry calibre bookmark file forward across update.
         self.logfile=None # cheesy way to carry log file forward across update.
         self.archivechapters=[{},[],{}]
+        self.raw_chapters = {}
 
         self.replacements_prepped = False
         self.chapter_text_replacements_prepped = False
@@ -1520,6 +1521,9 @@ class Story(Requestable):
         chapter['index']=chapter['index04']
         self.chapters.append(chapter)
 
+    def add_raw_chapter(self,chapter,index):
+        self.raw_chapters[index] = str(chapter)
+
     def getChapters(self,fortoc=False):
         "Chapters will be defaultdicts(unicode)"
         retval = []
@@ -1575,6 +1579,7 @@ class Story(Requestable):
             chapter['toctitle'] = toctempl.substitute(chapter)
             # set after, otherwise changes origtitle and toctitle
             chapter['title'] = chapter['chapter']
+            chapter['only_html'] = self.raw_chapters.get(index, None)
             ## chapter['html'] is a string.
             chapter['html'] = self.do_chapter_text_replacements(chapter['html'])
             retval.append(chapter)
