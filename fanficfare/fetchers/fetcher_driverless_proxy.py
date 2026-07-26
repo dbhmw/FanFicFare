@@ -147,7 +147,7 @@ class Driverless_ProxyFetcher(RequestsFetcher):
             raise exceptions.FailedToDownload("Failed to fetch %s. [%s]" % (url, response["status_code"]))
 
         if response['status_code'] in Driverless_ProxyFetcher.CLOUDFLARE_CODES:
-            http_error_msg = u"%s Server Error: %s for url: %s" % (response['status_code'], Driverless_ProxyFetcher.CLOUDFLARE_CODES[response['status_code']], url)
+            http_error_msg = u"%s Server Error. %s For url: %s" % (response['status_code'], Driverless_ProxyFetcher.CLOUDFLARE_CODES[response['status_code']], url)
         else:
             if 400 <= response["status_code"] < 500:
                 http_error_msg = u'%s Client Error. For url: %s' % (response['status_code'], url)
