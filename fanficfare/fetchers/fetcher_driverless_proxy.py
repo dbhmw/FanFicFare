@@ -15,7 +15,7 @@ from .. import exceptions
 from .log import make_log
 from .base_fetcher import FetcherResponse
 from .fetcher_requests import RequestsFetcher
-from ..six.moves.http_cookiejar import Cookie
+from http.cookiejar import Cookie
 
 import socket,base64,ssl,time
 import json as _json
