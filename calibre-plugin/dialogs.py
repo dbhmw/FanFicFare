@@ -73,7 +73,6 @@ from calibre_plugins.fanficfare_plugin.prefs import (
     anthology_collision_order,
     )
 
-from fanficfare.six import ensure_text
 from fanficfare.configurable import Configuration
 from io import StringIO
 
