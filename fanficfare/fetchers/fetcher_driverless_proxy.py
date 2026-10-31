@@ -55,14 +55,13 @@ class Driverless_ProxyFetcher(RequestsFetcher):
         content = decompress(packet[44:-9])
         if not checksum == sha256(content).digest():
             raise ValueError("Verification failed. Message is corrupted.")
-        offsets = content[:18].decode('utf-8')
-        response = content[18:]
-        #logger.debug(offsets)
+        offsets = content[:19].decode('utf-8')
+        response = content[19:]
 
         status_offset = int(offsets[:2])
         content_type_offset = status_offset + int(offsets[2:4])
         source_offset = content_type_offset + int(offsets[4:13])
-        cookies_offset = source_offset + int(offsets[13:18])
+        cookies_offset = source_offset + int(offsets[13:19])
 
         if not 0 <= status_offset <= content_type_offset <= source_offset <= cookies_offset == len(response):
             raise IndexError("Invalid offsets: %s, %s, %s, %s, len=%s"%str(status_offset),str(content_type_offset),str(source_offset),str(cookies_offset),str(len(response)))
